@@ -11,7 +11,7 @@ proxy: proxy.cpp ClientInfo.o
 	$(CC) $(FLAGS) $(DNS_PORT) $(INC) $(EXTRAS) $^ -o $@ $(LIBS)
 
 ClientInfo.o: ClientInfo.cpp ClientInfo.h
-	$(CC) -c $(FLAGS) $(DNS_PORT) $(INC) $(EXTRAS) $< -o $@ $(LIBS)
+	$(CC) -c $(FLAGS) $(DNS_PORT) $(INC) $(EXTRAS) $< -o $@
 
 clean:
 	$(RM) *.o proxy

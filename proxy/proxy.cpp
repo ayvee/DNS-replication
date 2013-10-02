@@ -226,7 +226,7 @@ void *listenToDnsServers(void *junk){
 			}
 			bytesSent += ret;
 		}
-        printf("%-30s%-20s%lu\n",target->question.c_str(),serverIP.c_str(),target->getQueryDuration());
+        printf("%-30s%-20s%lu\n",target->question.c_str(),serverIP.c_str(),(unsigned long)target->getQueryDuration());
 		delete target;
 	}
 }
