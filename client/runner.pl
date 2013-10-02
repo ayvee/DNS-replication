@@ -1,18 +1,19 @@
 use strict;
 use warnings 'all';
 
-use Time::HiRes qw / time sleep /;
+use Time::HiRes qw / time sleep / ;
 use Carp;
 
 my $cmd = "/usr/bin/wget --timeout=8 -e robots=off -U \"Mozilla/5.0 (X11; Linux x86_64; rv:10.0) Gecko/20100101 Firefox/10.0\" --page-requisites --no-check-certificate ";
 
-my $uOfIResolver = "130.126.2.131";
+my $uOfIResolver = "192.168.160.2";
 
 sub run {
     (@_ == 1) || die;
     my ($website) = @_;
     my $start = time;
-    system(join($cmd,$website," &>/dev/null"))
+    my $toExecute = $cmd.$website." &>/dev/null";
+    system($toExecute) == 0
         || die "Failed to download website";
     my $end = time;
     return $end-$start;
@@ -29,11 +30,11 @@ sub main {
     (@_ == 1) || die;
     my ($domainListFile) = @_;
     -e $domainListFile || die "file ".$domainListFile." not found";
-    open DOMAINFILE,">",$domainListFile || die "failed to open file for read";
+    open DOMAINFILE,"<",$domainListFile || die "failed to open file for read";
     for(my $i = 0; $i<100; $i++) {
-        open DATAFILE,"<","result_wor_".$i.".txt"
+        open DATAFILE,">","result_wr_".$i.".txt"
             || die "failed to open file for write";
-        setResolver($uOfIResolver);
+        setResolver("127.0.0.1");
         while(<DOMAINFILE>) {
             my $thisDomain = $_;
             $thisDomain =~ s/\s*//g;
@@ -46,9 +47,9 @@ sub main {
 
         seek DOMAINFILE,0,0;
 
-        open DATAFILE,"<","result_wr_".$i.".txt"
+        open DATAFILE,">","result_wor_".$i.".txt"
             || die "failed to open file for write";
-        setResolver("127.0.0.1");
+        setResolver($uOfIResolver);
         while(<DOMAINFILE>) {
             my $thisDomain = $_;
             $thisDomain =~ s/\s*//g;
@@ -58,8 +59,8 @@ sub main {
             sleep(0.5)
         }
         close DATAFILE;
-        close DOMAINFILE;
     }
+    close DOMAINFILE;
 }
 
 @ARGV == 1 || die;
