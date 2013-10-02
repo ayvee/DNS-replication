@@ -21,7 +21,7 @@ sub run {
 sub setResolver {
     (@_ == 1) || die;
     my ($newResolver) = @_;
-    system("sudo echo \"nameserver ".$newResolver." \" > /etc/resolv.conf")
+    system("sudo echo \"nameserver ".$newResolver." \" > /etc/resolv.conf") == 0
         || die "Failed to set resolver";
 }
 
