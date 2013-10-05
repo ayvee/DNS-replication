@@ -103,7 +103,16 @@ static string rebuildQueryName(const char* q)
 		ret += currentField;
 		ret += '.';
 	}
-	ret.erase(ret.length()-1, 1);
+
+    try
+    {
+	    ret.erase(ret.length()-1, 1);
+    }
+    catch(int e)
+    {
+        cerr << "EXCEPTION CAUGHT!" << endl;
+        return string("");
+    }
 	return ret;
 }
 
