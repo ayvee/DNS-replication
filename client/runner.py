@@ -47,6 +47,7 @@ def main():
         print "needs file name"
         exit()
     defaultResolver = getDefaultResolver()
+    print "using "+defaultResolver+" as default resolver"
     assert len(defaultResolver) != 0
     domainListFile = open(sys.argv[1])
     for i in range(0,iterations):
@@ -61,6 +62,8 @@ def main():
         output = open("result_with_rep"+str(i),'w')
         downloadAll(domainListFile, output)
         output.close()
+
+        time.sleep(60)
 
     domainListFile.close()
     setResolver(defaultResolver)
