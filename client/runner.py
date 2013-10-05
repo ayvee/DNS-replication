@@ -37,7 +37,7 @@ def downloadAll(fileHandle,outputHandle):
             break
         runtime = download(website)
         outputHandle.write(website+","+str(runtime)+"\n")
-        print "download time of "+website+" is "+runtime+"\n"
+        print "download time of "+website+" is "+str(runtime)+"\n"
         time.sleep(0.5)
 
 def setResolver(resolver):
