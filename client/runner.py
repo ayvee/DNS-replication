@@ -10,15 +10,15 @@ defaultResolver = "192.168.160.2"
 iterations = 100
 
 def getDefaultResolver():
-    with open("/etc/resolv.conf",'r') as resolfFile:
-        for line in resolfFile:
-            line = line.replace('\n','').strip()
-            if line[0] == '#' or len(line) < len("nameserver "):
-                continue
-            if line[:11] == "nameserver ":
-                defaultResolver = line[11:]
-                print "using "+defaultResolver+" as default name server"
-                break
+    resolvFile = open("/etc/resolv.conf",'r')
+    for line in resolfFile:
+        line = line.replace('\n','').strip()
+        if line[0] == '#' or len(line) < len("nameserver "):
+            continue
+        if line[:11] == "nameserver ":
+            defaultResolver = line[11:]
+            print "using "+defaultResolver+" as default name server"
+            break
 
 def download(website):
     assert len(website)>0
@@ -37,6 +37,7 @@ def downloadAll(fileHandle,outputHandle):
             break
         runtime = download(website)
         outputHandle.write(website+","+str(runtime)+"\n")
+        print "download time of "+website+" is "+runtime+"\n"
         time.sleep(0.5)
 
 def setResolver(resolver):
