@@ -108,7 +108,7 @@ static string rebuildQueryName(const char* q)
     {
 	    ret.erase(ret.length()-1, 1);
     }
-    catch(int e)
+    catch(...)
     {
         cerr << "EXCEPTION CAUGHT!" << endl;
         return string("");
