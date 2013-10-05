@@ -5,20 +5,16 @@ from datetime import datetime
 
 cmd = "/usr/bin/wget --timeout=8 -e robots=off -U \"Mozilla/5.0 (X11; Linux x86_64; rv:10.0) Gecko/20100101 Firefox/10.0\" --page-requisites --no-check-certificate "
 
-defaultResolver = "192.168.160.2"
-
 iterations = 100
 
 def getDefaultResolver():
     resolvFile = open("/etc/resolv.conf",'r')
-    for line in resolfFile:
+    for line in resolvFile:
         line = line.replace('\n','').strip()
         if line[0] == '#' or len(line) < len("nameserver "):
             continue
         if line[:11] == "nameserver ":
-            defaultResolver = line[11:]
-            print "using "+defaultResolver+" as default name server"
-            break
+            return line[11:]
 
 def download(website):
     assert len(website)>0
@@ -50,17 +46,18 @@ def main():
     if len(sys.argv) != 2:
         print "needs file name"
         exit()
-    getDefaultResolver()
+    defaultResolver = getDefaultResolver()
+    assert len(defaultResolver) != 0
     domainListFile = open(sys.argv[1])
     for i in range(0,iterations):
-        setResolver("127.0.0.1")
+        setResolver(defaultResolver)
         output = open("result_no_rep"+str(i),'w')
         downloadAll(domainListFile, output)
         output.close()
 
         time.sleep(60)
 
-        setResolver(defaultResolver)
+        setResolver("127.0.0.1")
         output = open("result_with_rep"+str(i),'w')
         downloadAll(domainListFile, output)
         output.close()
