@@ -40,7 +40,7 @@ def downloadAll(fileHandle,outputHandle):
         time.sleep(0.5)
 
 def setResolver(resolver):
-    rv = os.system("sudo echo \"nameserver"+str(resolver)+"\" > /etc/resolv.conf")
+    rv = os.system("sudo echo \"nameserver "+str(resolver)+"\" > /etc/resolv.conf")
     if rv != 0:
         print "failed to set resolver to "+str(resolver)
         exit(1)
@@ -60,9 +60,12 @@ def main():
         time.sleep(60)
 
         setResolver(defaultResolver)
-        output = open("result_with_rep"+str(1),'w')
+        output = open("result_with_rep"+str(i),'w')
         downloadAll(domainListFile, output)
         output.close()
 
     domainListFile.close()
     setResolver(defaultResolver)
+
+if __name__ == '__main__':
+    main()
