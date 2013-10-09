@@ -27,6 +27,9 @@
 #define BUF_SIZE         1024
 #define PROXY_PORT       8962
 
+#define LOCK_MUTEX(lock)    if(pthread_mutex_lock(lock)){exit(10);}
+#define UNLOCK_MUTEX(lock)  if(pthread_mutex_unlock(lock)){exit(11);}
+
 using namespace std;
 
 /**********
@@ -48,8 +51,7 @@ static char *hostName = NULL;
  * Prints out usage info
  */
 void usage(char *execName){
-	cout<<"Usage:"<<endl;
-	cout<<execName<<" -f <DNS file>"<<endl;
+	cerr<<"Usage:\n\t"<<execName<<" -f <DNS file>"<<endl;
 }
 
 /**
@@ -63,16 +65,24 @@ static vector<struct sockaddr_in> dnsServers;
  * ClientInfo	- the corresponding ClientInfo object pointer
  */
 static map<uint16_t, ClientInfo*> pendingQueries;
+static pthread_mutex_t mapLock;
 
 /**
  * Ckecks if a given trsaction ID conflicts with any pending queries
  */
 static inline bool conflictId(uint16_t id)
 {
+    bool rv = false;
+
+    LOCK_MUTEX(&mapLock);
 	map<uint16_t, ClientInfo*>::iterator i = pendingQueries.find(id);
 	if(i != pendingQueries.end())
-		return true;
-	return false;
+    {
+        rv = true;
+    }
+    UNLOCK_MUTEX(&mapLock);
+
+	return rv;
 }
 
 /**
@@ -80,12 +90,16 @@ static inline bool conflictId(uint16_t id)
  */
 static uint16_t getNewId()
 {
+    LOCK_MUTEX(&mapLock);
 	while(1)
 	{
 		uint16_t newId = rand() % (65535u);
 		map<uint16_t, ClientInfo*>::iterator i = pendingQueries.find(newId);
 		if(i == pendingQueries.end())
+        {
+            UNLOCK_MUTEX(&mapLock);
 			return newId;
+        }
 	}
 }
 
@@ -152,7 +166,9 @@ void *listenToClients(void *junk)
 			newClient->reassignId(*(uint16_t*)buf);
 		}
 
+        LOCK_MUTEX(&mapLock);
 		pendingQueries[*(uint16_t*)buf] = newClient;
+        UNLOCK_MUTEX(&mapLock);
 		
 		//relay query
         newClient->setTimeOfQuery();
@@ -161,7 +177,12 @@ void *listenToClients(void *junk)
 			int ret, bytesSent = 0;
 			while(bytesSent < pktSize)
 			{
-				if((ret = sendto(socketToDNSServers, buf+(ptrdiff_t)bytesSent, pktSize-bytesSent, 0, (struct sockaddr*)&(dnsServers[i]), slen)) == -1)
+				if((ret = sendto(socketToDNSServers,
+                                 buf+(ptrdiff_t)bytesSent,
+                                 pktSize-bytesSent,
+                                 0,
+                                 (struct sockaddr*)&(dnsServers[i]),
+                                 slen)) == -1)
 				{
 					perror("Error sendto() to DNS");
 					exit(-1);
@@ -183,7 +204,7 @@ void *listenToDnsServers(void *junk){
 	socklen_t slen=sizeof(otherHostAddr);
 
 	//map from client ip to server ip
-	map<string, string> receivedResponse;
+	//map<string, string> receivedResponse;
 
 	while(1){
 		char responseBuf[BUF_SIZE];
@@ -199,15 +220,18 @@ void *listenToDnsServers(void *junk){
 		uint16_t responseTransacId = *(uint16_t*)responseBuf;
 		//cerr<<"Got response from "<<serverIP<<"!"<<endl;
 
+        LOCK_MUTEX(&mapLock);
 		map<uint16_t, ClientInfo*>::iterator res = pendingQueries.find(responseTransacId);
 		if(res == pendingQueries.end())
 		{
             // if not found, this query must have benn answered already,
             // slinently continue.
+            UNLOCK_MUTEX(&mapLock);
 			continue;
 		}
 		ClientInfo *target = res->second;
 		pendingQueries.erase(res);
+        UNLOCK_MUTEX(&mapLock);
         target->setTimeOfReply();
 
 		*(uint16_t*)responseBuf = target->originalId; // restore the transaction ID
@@ -228,7 +252,12 @@ void *listenToDnsServers(void *junk){
 		int bytesSent = 0, ret;
 		while(bytesSent < pktSize)
 		{
-			if((ret = sendto(proxySocket, responseBuf+(ptrdiff_t)bytesSent, pktSize-bytesSent, 0, (struct sockaddr*)&client_addr, slen_t)) == -1)
+			if((ret = sendto(proxySocket,
+                             responseBuf+(ptrdiff_t)bytesSent,
+                             pktSize-bytesSent,
+                             0,
+                             (struct sockaddr*)&client_addr,
+                             slen_t)) == -1)
 			{
 				perror("Erro sendto() to client");
 				exit(1);
@@ -384,6 +413,11 @@ int main(int argc, char **argv){
 	//print out formatting info
     printf("%-30s%-20s%s\n","Query","First Responder","Time elapsed (micro seconds)");
 
+    if(pthread_mutex_init(&mapLock, NULL))
+    {
+        perror("pthread_mutex_init");
+        exit(-1);
+    }
 	if(pthread_create(&dnsListenerThread, NULL, listenToDnsServers, NULL))
 	{
 		perror("pthread_create");
@@ -397,6 +431,7 @@ int main(int argc, char **argv){
 
 	pthread_join(dnsListenerThread, NULL);
 	pthread_join(clientListenerThread, NULL);
+    pthread_mutex_destroy(&mapLock);
 
 	free(hostName);
 	
