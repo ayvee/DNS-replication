@@ -22,9 +22,7 @@ def download(website):
     os.system(cmd+website+" &>/dev/null")
     end = datetime.now()
     diff = end - start
-    os.system("rm -rf *"+website+"*")
-    os.system("rm -rf *.com")
-    os.system("rm -rf www.*")
+    os.system("for i in $(ls -d */); do sudo rm -rf $i; done")
     return diff.seconds*1000000+diff.microseconds
 
 def downloadAll(fileHandle,outputHandle):
