@@ -23,6 +23,8 @@ def download(website):
     end = datetime.now()
     diff = end - start
     os.system("rm -rf *"+website+"*")
+    os.system("rm -rf *.com")
+    os.system("rm -rf www.*")
     return diff.seconds*1000000+diff.microseconds
 
 def downloadAll(fileHandle,outputHandle):
