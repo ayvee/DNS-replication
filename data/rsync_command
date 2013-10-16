@@ -1,0 +1,1 @@
+rsync -a -v --delete uiuc_sr@planetlab1.cs.uiuc.edu:cs499/client/result* .
