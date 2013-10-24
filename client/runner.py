@@ -7,7 +7,7 @@ import subprocess
 from datetime import datetime
 
 cmd = "/usr/bin/wget --timeout=8 -e robots=off -U \"Mozilla/5.0 (X11; Linux x86_64; rv:10.0) Gecko/20100101 Firefox/10.0\" --page-requisites --no-check-certificate "
-iterations = 3
+iterations = 1
 
 class Trail:
     def __init__(self,website,reps):
@@ -54,6 +54,7 @@ def writeResult(trail,time,fileHandle):
     string = str(trail.numReps)+","+str(trail.website)+","+str(time)
     fileHandle.write(string+"\n")
     os.fsync(fileHandle)
+
 ###################################################################################
 
 def main():
@@ -122,7 +123,7 @@ def main():
 
             proxy = subprocess.Popen([proxyBin,'-f',tempDNSFile.name], stdout=DEVNULL, stderr=DEVNULL)
             setResolver("127.0.0.1")
-            time.sleep(0.5)
+            time.sleep(1)
             runtime = timedExecuteMicroSecond(trail.command)
             assert(proxy.returncode == None)
             writeResult(trail,runtime,resultFile)
