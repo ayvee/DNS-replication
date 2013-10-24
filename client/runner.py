@@ -2,6 +2,7 @@ import os
 import sys
 import time
 import random
+import signal
 import tempfile
 import subprocess
 from datetime import datetime
@@ -24,6 +25,7 @@ def getDefaultResolver():
             continue
         if line[:11] == "nameserver ":
             return line[11:]
+    resolvFile.close()
 
 def timedExecuteMicroSecond(cmd):
     assert len(cmd)>0
@@ -127,7 +129,7 @@ def main():
             runtime = timedExecuteMicroSecond(trail.command)
             assert(proxy.returncode == None)
             writeResult(trail,runtime,resultFile)
-            proxy.send_signal(3) #sigquit
+            os.kill(proxy.pid,signal.SIGQUIT)
             proxy.wait()
             #os.remove(tempDNSFile.name)
         else:
