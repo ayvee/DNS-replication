@@ -115,7 +115,7 @@ def main():
     for trail in allTrails:
         time.sleep(trail.waitTime)
         if(trail.numReps != 1):
-            tempDNSFile = tempfile.NamedTemporaryFile(delete=False)
+            tempDNSFile = tempfile.NamedTemporaryFile()
             dnsList = getRandomDnsList(defaultResolver,allDnsServers,trail.numReps)
             for i in dnsList:
                 tempDNSFile.write(i+"\n")
