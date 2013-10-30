@@ -122,7 +122,7 @@ def main():
         if(ifNeedSleep(trial)):
             time.sleep(trial.waitTime)
         try:
-            historyQueue.put(trial.websiteID)
+            historyQueue.put(trial.websiteID,False)
         except Queue.Full:
             historyQueue.get()
         if(trial.numReps != 1):
