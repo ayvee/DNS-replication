@@ -5,17 +5,30 @@ import random
 import signal
 import tempfile
 import subprocess
+import Queue
 from datetime import datetime
 
 cmd = "/usr/bin/wget --timeout=8 -e robots=off -U \"Mozilla/5.0 (X11; Linux x86_64; rv:10.0) Gecko/20100101 Firefox/10.0\" --page-requisites --no-check-certificate "
-iterations = 1
+iterations = 10
+
+historyQueue = Queue.Queue(70)
+allDomains = []
 
 class Trial:
-    def __init__(self,website,reps):
-        self.command = cmd+" "+website+" &>/dev/null"
+    def __init__(self,websiteID,reps):
         self.numReps = reps
         self.waitTime = 10*random.random()+0.1
-        self.website = website
+        self.websiteID = websiteID
+
+def ifNeedSleep(trial):
+    l = list(historyQueue.queue)
+    for history in l:
+        if(trial.websiteID == l):
+            return True
+    return False
+
+def getCommand(website):
+    return cmd+" "+website+" &>/dev/null"
 
 def getDefaultResolver():
     resolvFile = open("/etc/resolv.conf",'r')
@@ -53,8 +66,9 @@ def getRandomDnsList(defaultDns,lst,numNeeded):
     return ret
 
 def writeResult(trial,time,fileHandle):
-    string = str(trial.numReps)+","+str(trial.website)+","+str(time)
+    string = str(trial.numReps)+","+str(allDomains[trial.websiteID])+","+str(time)
     fileHandle.write(string+"\n")
+    fileHandle.flush()
     os.fsync(fileHandle)
 
 ###################################################################################
@@ -73,7 +87,6 @@ def main():
     domainListFile = open(sys.argv[3])
     resultFile = open("result.csv","w")
     defaultResolver = getDefaultResolver()
-    allDomains = []
     allTrials = []
     allDnsServers = []
 
@@ -91,31 +104,27 @@ def main():
     domainListFile.close()
 
     for i in range(iterations):
-        for d in allDomains:
-            allTrials.append(Trial(d,1))
-        for d in allDomains:
-            allTrials.append(Trial(d,1))
-        for d in allDomains:
-            allTrials.append(Trial(d,1))
-        for d in allDomains:
-            allTrials.append(Trial(d,1))
-        for d in allDomains:
-            allTrials.append(Trial(d,1))
-        for d in allDomains:
-            allTrials.append(Trial(d,2))
-        for d in allDomains:
-            allTrials.append(Trial(d,3))
-        for d in allDomains:
-            allTrials.append(Trial(d,4))
-        for d in allDomains:
-            allTrials.append(Trial(d,5))
-        for d in allDomains:
-            allTrials.append(Trial(d,6))
+        for id in range(len(allDomains)):
+            allTrials.append(Trial(id,1))
+            allTrials.append(Trial(id,1))
+            allTrials.append(Trial(id,1))
+            allTrials.append(Trial(id,1))
+            allTrials.append(Trial(id,1))
+            allTrials.append(Trial(id,2))
+            allTrials.append(Trial(id,3))
+            allTrials.append(Trial(id,4))
+            allTrials.append(Trial(id,5))
+            allTrials.append(Trial(id,6))
 
     random.shuffle(allTrials)
 
     for trial in allTrials:
-        time.sleep(trial.waitTime)
+        if(ifNeedSleep(trial)):
+            time.sleep(trial.waitTime)
+        try:
+            historyQueue.put(trial.websiteID)
+        except Queue.Full:
+            historyQueue.get()
         if(trial.numReps != 1):
             tempDNSFile = tempfile.NamedTemporaryFile()
             dnsList = getRandomDnsList(defaultResolver,allDnsServers,trial.numReps)
@@ -126,7 +135,7 @@ def main():
             proxy = subprocess.Popen([proxyBin,'-f',tempDNSFile.name], stdout=DEVNULL, stderr=DEVNULL)
             setResolver("127.0.0.1")
             time.sleep(1)
-            runtime = timedExecuteMicroSecond(trial.command)
+            runtime = timedExecuteMicroSecond(getCommand(allDomains[trial.websiteID]))
             assert(proxy.returncode == None)
             writeResult(trial,runtime,resultFile)
             os.kill(proxy.pid,signal.SIGQUIT)
@@ -134,7 +143,7 @@ def main():
             #os.remove(tempDNSFile.name)
         else:
             setResolver(defaultResolver)
-            runtime = timedExecuteMicroSecond(trial.command)
+            runtime = timedExecuteMicroSecond(getCommand(allDomains[trial.websiteID]))
             writeResult(trial,runtime,resultFile)
 
     resultFile.close()
