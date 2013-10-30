@@ -10,7 +10,7 @@ from datetime import datetime
 cmd = "/usr/bin/wget --timeout=8 -e robots=off -U \"Mozilla/5.0 (X11; Linux x86_64; rv:10.0) Gecko/20100101 Firefox/10.0\" --page-requisites --no-check-certificate "
 iterations = 1
 
-class Trail:
+class Trial:
     def __init__(self,website,reps):
         self.command = cmd+" "+website+" &>/dev/null"
         self.numReps = reps
@@ -52,8 +52,8 @@ def getRandomDnsList(defaultDns,lst,numNeeded):
         ret.append(lst[i])
     return ret
 
-def writeResult(trail,time,fileHandle):
-    string = str(trail.numReps)+","+str(trail.website)+","+str(time)
+def writeResult(trial,time,fileHandle):
+    string = str(trial.numReps)+","+str(trial.website)+","+str(time)
     fileHandle.write(string+"\n")
     os.fsync(fileHandle)
 
@@ -74,7 +74,7 @@ def main():
     resultFile = open("result.csv","w")
     defaultResolver = getDefaultResolver()
     allDomains = []
-    allTrails = []
+    allTrials = []
     allDnsServers = []
 
     DEVNULL = open(os.devnull,'wb')
@@ -92,33 +92,33 @@ def main():
 
     for i in range(iterations):
         for d in allDomains:
-            allTrails.append(Trail(d,1))
+            allTrials.append(Trial(d,1))
         for d in allDomains:
-            allTrails.append(Trail(d,1))
+            allTrials.append(Trial(d,1))
         for d in allDomains:
-            allTrails.append(Trail(d,1))
+            allTrials.append(Trial(d,1))
         for d in allDomains:
-            allTrails.append(Trail(d,1))
+            allTrials.append(Trial(d,1))
         for d in allDomains:
-            allTrails.append(Trail(d,1))
+            allTrials.append(Trial(d,1))
         for d in allDomains:
-            allTrails.append(Trail(d,2))
+            allTrials.append(Trial(d,2))
         for d in allDomains:
-            allTrails.append(Trail(d,3))
+            allTrials.append(Trial(d,3))
         for d in allDomains:
-            allTrails.append(Trail(d,4))
+            allTrials.append(Trial(d,4))
         for d in allDomains:
-            allTrails.append(Trail(d,5))
+            allTrials.append(Trial(d,5))
         for d in allDomains:
-            allTrails.append(Trail(d,6))
+            allTrials.append(Trial(d,6))
 
-    random.shuffle(allTrails)
+    random.shuffle(allTrials)
 
-    for trail in allTrails:
-        time.sleep(trail.waitTime)
-        if(trail.numReps != 1):
+    for trial in allTrials:
+        time.sleep(trial.waitTime)
+        if(trial.numReps != 1):
             tempDNSFile = tempfile.NamedTemporaryFile()
-            dnsList = getRandomDnsList(defaultResolver,allDnsServers,trail.numReps)
+            dnsList = getRandomDnsList(defaultResolver,allDnsServers,trial.numReps)
             for i in dnsList:
                 tempDNSFile.write(i+"\n")
             tempDNSFile.close()
@@ -126,16 +126,16 @@ def main():
             proxy = subprocess.Popen([proxyBin,'-f',tempDNSFile.name], stdout=DEVNULL, stderr=DEVNULL)
             setResolver("127.0.0.1")
             time.sleep(1)
-            runtime = timedExecuteMicroSecond(trail.command)
+            runtime = timedExecuteMicroSecond(trial.command)
             assert(proxy.returncode == None)
-            writeResult(trail,runtime,resultFile)
+            writeResult(trial,runtime,resultFile)
             os.kill(proxy.pid,signal.SIGQUIT)
             proxy.wait()
             #os.remove(tempDNSFile.name)
         else:
             setResolver(defaultResolver)
-            runtime = timedExecuteMicroSecond(trail.command)
-            writeResult(trail,runtime,resultFile)
+            runtime = timedExecuteMicroSecond(trial.command)
+            writeResult(trial,runtime,resultFile)
 
     resultFile.close()
     setResolver(defaultResolver)
