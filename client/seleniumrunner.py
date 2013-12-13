@@ -11,9 +11,8 @@ import Queue
 from datetime import datetime
 from selenium import webdriver
 
-iterations = 10
-historyQueue = Queue.Queue(70)
-allDomains = []
+iterations = 1
+
 firefox = webdriver.Firefox()
 
 class Trial:
@@ -22,32 +21,23 @@ class Trial:
         self.waitTime = 10*random.random()+0.1
         self.websiteID = websiteID
 
-class History:
-    def __init__(self,websiteID):
-        self.websiteID = websiteID
-        self.time = datetime.now()
-
-def getSleepTime(trial):
-    l = list(historyQueue.queue)
-    for history in l:
-        if(trial.websiteID == history.websiteID):
-            diff = datetime.now() - history.time
-            if(diff.seconds < 60):
-                return 60-diff.seconds + 1
-    return 0
-
 def getURL(website):
     return "http://"+website
 
 def getDefaultResolver():
     resolvFile = open("/etc/resolv.conf",'r')
+    rv = ""
     for line in resolvFile:
         line = line.replace('\n','').strip()
         if line[0] == '#' or len(line) < len("nameserver "):
             continue
         if line[:11] == "nameserver ":
-            return line[11:]
+            rv = line[11:]
     resolvFile.close()
+    if(rv == ""):
+        print "Failed to get default resolver"
+        exit(1)
+    return rv
 
 def getDownloadTimeMicroSecond(url):
     global firefox
@@ -107,10 +97,12 @@ def main():
     defaultResolver = getDefaultResolver()
     allTrials = []
     allDnsServers = []
+    allDomains = []
+    lastRunTime = {}
 
     DEVNULL = open(os.devnull,'wb')
 
-    print "using "+defaultResolver+" as default resolver"
+    print "Default resolver: "+defaultResolver
 
     for thisDomain in domainListFile:
         allDomains.append(thisDomain.rstrip())
@@ -124,24 +116,22 @@ def main():
     for i in range(iterations):
         for id in range(len(allDomains)):
             allTrials.append(Trial(id,1))
-#            allTrials.append(Trial(id,2))
-#            allTrials.append(Trial(id,3))
-            allTrials.append(Trial(id,4))
-#            allTrials.append(Trial(id,5))
-#            allTrials.append(Trial(id,6))
+            allTrials.append(Trial(id,3))
+            lastRunTime[id] = -1
 
     random.shuffle(allTrials)
 
     for trial in allTrials:
-        sleepTime = getSleepTime(trial)
-#        time.sleep(sleepTime)
-        print "Sleeping for "+str(sleepTime)+"s"
-        try:
-            historyQueue.put(History(trial.websiteID),False)
-        except Queue.Full:
-            historyQueue.get()
-            historyQueue.put(History(trial.websiteID),False)
-        if(trial.numReps != 1):
+        currTime = datetime.now()
+        currTime = currTime.seconds * 1000000 + currTime.microseconds
+        lastRunAt = lastRunTime[allDomains[trial.websiteID]]
+        # if last run on the same website was within 60s, sleep
+        if(currTime - lastRunAt < 60*1000*1000):
+            sleepTime = 60 - (currTime - lastRunAt)/(1000*1000)+1
+            print "Sleeping for "+str(sleepTime)+"s"
+            time.sleep(sleepTime)
+       
+        if(trial.numReps > 1):
             tempDNSFile = tempfile.NamedTemporaryFile(delete=False)
             dnsList = getRandomDnsList(defaultResolver,allDnsServers,trial.numReps)
             for i in dnsList:
@@ -151,6 +141,7 @@ def main():
             proxy = subprocess.Popen([proxyBin,'-f',tempDNSFile.name], stdout=DEVNULL, stderr=DEVNULL)
             setResolver("127.0.0.1")
 
+            # test to see if the server is up
             test_skt = socket.socket(socket.AF_INET,socket.SOCK_DGRAM)
             rv = -1
             while(rv != 0):
