@@ -10,10 +10,13 @@ import subprocess
 import Queue
 from datetime import datetime
 from selenium import webdriver
+from selenium.webdriver.support.ui import WebDriverWait
 
 iterations = 1
+browser = webdriver.Firefox()
+#browser = webdriver.Chrome('./chromedriver')
 
-firefox = webdriver.Firefox()
+allDomains = []
 
 class Trial:
     def __init__(self,websiteID,reps):
@@ -40,16 +43,25 @@ def getDefaultResolver():
     return rv
 
 def getDownloadTimeMicroSecond(url):
-    global firefox
+    global browser
     success = False
     downloadTime = 0
+    numRetries = 0
     while(success == False):
         print "Downloading "+str(url)
         start = datetime.now()
         try:
-            firefox.get(url)
-        except httplib.BadStatusLine:
-            firefox = webdriver.Firefox()
+            browser.get(url)
+	    wait = WebDriverWait(browser, 20, poll_frequency=0.05)\
+	    	.until(lambda drv: drv.execute_script("return document.readyState") == "complete")
+	except Exception as e:
+            print e
+#            browser.quit()
+#            browser = webdriver.Chrome('./chromedriver')
+            browser = webdriver.Firefox()
+	    if(numRetries == 2):
+	        return 20*1000*1000
+	    numRetries += 1
             continue
         success = True
         end = datetime.now()
@@ -97,7 +109,6 @@ def main():
     defaultResolver = getDefaultResolver()
     allTrials = []
     allDnsServers = []
-    allDomains = []
     lastRunTime = {}
 
     DEVNULL = open(os.devnull,'wb')
@@ -122,15 +133,14 @@ def main():
     random.shuffle(allTrials)
 
     for trial in allTrials:
-        currTime = datetime.now()
-        currTime = currTime.seconds * 1000000 + currTime.microseconds
-        lastRunAt = lastRunTime[allDomains[trial.websiteID]]
+        currTime = time.time()
+        lastRunAt = lastRunTime[trial.websiteID]
         # if last run on the same website was within 60s, sleep
-        if(currTime - lastRunAt < 60*1000*1000):
-            sleepTime = 60 - (currTime - lastRunAt)/(1000*1000)+1
+        if(currTime - lastRunAt < 60):
+            sleepTime = 60 - (currTime - lastRunAt)+1
             print "Sleeping for "+str(sleepTime)+"s"
             time.sleep(sleepTime)
-       
+	lastRunTime[trial.websiteID] = time.time()
         if(trial.numReps > 1):
             tempDNSFile = tempfile.NamedTemporaryFile(delete=False)
             dnsList = getRandomDnsList(defaultResolver,allDnsServers,trial.numReps)
@@ -162,7 +172,7 @@ def main():
     resultFile.close()
     setResolver(defaultResolver)
     DEVNULL.close()
-    firefox.quit()
+    browser.quit()
     
     
 if(__name__ == '__main__'):
