@@ -349,6 +349,7 @@ int main(int argc, char **argv){
     char *print_str = NULL;
     char *abs_lock_path = NULL;
     char *abs_lock_dir = NULL;
+    char *temp;
     FILE *init_file_lock = NULL;
     struct timeval curr_time;
     long time_usec = -1;
@@ -390,25 +391,35 @@ int main(int argc, char **argv){
         exit(EXIT_FAILURE);
     }
 
-    if(-1 == readlink("/proc/self/exe",abs_lock_path,256))
+    if(-1 == (rv = readlink("/proc/self/exe",abs_lock_path,256)))
     {
         perror("readlink");
         exit(EXIT_FAILURE);
     }
 
-    abs_lock_path[255] = '\0';
+    abs_lock_path[rv] = '\0';
 
-    if(NULL == (abs_lock_dir = dirname(abs_lock_path)))
+    if(NULL == (temp = strdup(abs_lock_path)))
+    {
+        perror("strdup");
+        exit(EXIT_FAILURE);
+    }
+
+    if(NULL == (abs_lock_dir = dirname(temp)))
     {
         perror("dirname");
         exit(EXIT_FAILURE);
     }
+
+    printf("Extracted dir name: %s\n",abs_lock_dir);
 
     if(0 > snprintf(abs_lock_path, 256, "%s/%s", abs_lock_dir, LOCK_FILE_NAME))
     {
         perror("snprintf");
         exit(EXIT_FAILURE);
     }
+
+    free(temp);
 
     /*
      * start to read from file
@@ -481,6 +492,8 @@ int main(int argc, char **argv){
         exit(-1);
     }
 
+    printf("Opening lock file: %s\n",abs_lock_path);
+
     if(NULL == (init_file_lock = fopen(abs_lock_path,"w")))
     {
         perror("fopen");
@@ -512,6 +525,9 @@ int main(int argc, char **argv){
         perror("fclose");
         exit(EXIT_FAILURE);
     }
+
+    free(print_str);
+    free(abs_lock_path);
 
     pthread_join(dnsListenerThread, NULL);
     pthread_join(clientListenerThread, NULL);

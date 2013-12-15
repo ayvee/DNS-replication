@@ -12,6 +12,7 @@ from datetime import datetime
 from selenium import webdriver
 from selenium.webdriver.support.ui import WebDriverWait
 
+proxyLockFilePath = ""
 downloadTimeoutSec = 20
 iterations = 4
 browser = webdriver.Firefox()
@@ -94,7 +95,7 @@ def writeResult(trial,time,fileHandle):
 ###################################################################################
 
 def main():
-    if len(sys.argv) != 4:
+    if len(sys.argv) != 5:
         print "incorrect args"
         exit()
 
@@ -103,8 +104,9 @@ def main():
         exit()
 
     proxyBin = sys.argv[1]
-    dnsListFile = open(sys.argv[2])
-    domainListFile = open(sys.argv[3])
+    proxyLockFilePath = sys.argv[2]
+    dnsListFile = open(sys.argv[3])
+    domainListFile = open(sys.argv[4])
     resultFile = open("result.csv","w")
     defaultResolver = getDefaultResolver()
     allTrials = []
@@ -151,12 +153,22 @@ def main():
             proxy = subprocess.Popen([proxyBin,'-f',tempDNSFile.name], stdout=DEVNULL, stderr=DEVNULL)
             setResolver("127.0.0.1")
 
-            # test to see if the server is up
-            test_skt = socket.socket(socket.AF_INET,socket.SOCK_DGRAM)
-            rv = -1
-            while(rv != 0):
-                rv = test_skt.connect_ex(('127.0.0.1',53))
-            test_skt.close()
+            # make sure the server is up by checking its active lock file
+            lockFile = None
+            while True:
+                try:
+                    lockFile = open(proxyLockFilePath,'r')
+                    break
+                except IOError:
+                    pass
+                else:
+                    content = lockFile.readline().split(',')
+                    startTime = int(content[0])
+                    replication = int(content[1])
+                    if(replication == trial.numReps):
+                        break
+                finally:
+                    time.sleep(0.1)
 
             runtime = getDownloadTimeMicroSecond(getURL(allDomains[trial.websiteID]))
             assert(proxy.returncode == None)
