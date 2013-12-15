@@ -10,6 +10,7 @@
 #include <signal.h>
 #include <assert.h>
 #include <time.h>
+#include <libgen.h>
 #include <arpa/inet.h>
 #include <netinet/in.h>
 #include <sys/types.h>
@@ -346,6 +347,8 @@ int main(int argc, char **argv){
     char c;
     char *dnsFile = NULL;
     char *print_str = NULL;
+    char *abs_lock_path = NULL;
+    char *abs_lock_dir = NULL;
     FILE *init_file_lock = NULL;
     struct timeval curr_time;
     long time_usec = -1;
@@ -379,6 +382,32 @@ int main(int argc, char **argv){
         cerr<<"Too many argument(s)"<<endl;
         usage(argv[0]);
         exit(1);
+    }
+
+    if(NULL == (abs_lock_path = (char*)malloc(256)))
+    {
+        perror("malloc");
+        exit(EXIT_FAILURE);
+    }
+
+    if(-1 == readlink("/proc/self/exe",abs_lock_path,256))
+    {
+        perror("readlink");
+        exit(EXIT_FAILURE);
+    }
+
+    abs_lock_path[255] = '\0';
+
+    if(NULL == (abs_lock_dir = dirname(abs_lock_path)))
+    {
+        perror("dirname");
+        exit(EXIT_FAILURE);
+    }
+
+    if(0 > snprintf(abs_lock_path, 256, "%s/%s", abs_lock_dir, LOCK_FILE_NAME))
+    {
+        perror("snprintf");
+        exit(EXIT_FAILURE);
     }
 
     /*
@@ -452,7 +481,7 @@ int main(int argc, char **argv){
         exit(-1);
     }
 
-    if(NULL == (init_file_lock = fopen(LOCK_FILE_NAME,"w")))
+    if(NULL == (init_file_lock = fopen(abs_lock_path,"w")))
     {
         perror("fopen");
         exit(EXIT_FAILURE);
