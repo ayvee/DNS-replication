@@ -12,7 +12,8 @@ from datetime import datetime
 from selenium import webdriver
 from selenium.webdriver.support.ui import WebDriverWait
 
-iterations = 1
+downloadTimeoutSec = 20
+iterations = 4
 browser = webdriver.Firefox()
 #browser = webdriver.Chrome('./chromedriver')
 
@@ -44,6 +45,7 @@ def getDefaultResolver():
 
 def getDownloadTimeMicroSecond(url):
     global browser
+    global downloadTimeoutSec
     success = False
     downloadTime = 0
     numRetries = 0
@@ -52,21 +54,19 @@ def getDownloadTimeMicroSecond(url):
         start = datetime.now()
         try:
             browser.get(url)
-	    wait = WebDriverWait(browser, 20, poll_frequency=0.05)\
-	    	.until(lambda drv: drv.execute_script("return document.readyState") == "complete")
-	except Exception as e:
+            wait = WebDriverWait(browser, downloadTimeoutSec, poll_frequency=0.08)\
+                .until(lambda drv: drv.execute_script("return document.readyState") == "complete")
+        except Exception as e:
             print e
-#            browser.quit()
-#            browser = webdriver.Chrome('./chromedriver')
             browser = webdriver.Firefox()
-	    if(numRetries == 2):
-	        return 20*1000*1000
-	    numRetries += 1
+            if(numRetries == 2):
+                return downloadTimeoutSec*1000*1000
+            numRetries += 1
             continue
-        success = True
         end = datetime.now()
         diff = end - start
-        downloadTime = diff.seconds*1000000+diff.microseconds
+        downloadTime = diff.seconds * 1000 * 1000 + diff.microseconds
+        success = True
     return downloadTime
 
 def setResolver(resolver):
@@ -140,7 +140,7 @@ def main():
             sleepTime = 60 - (currTime - lastRunAt)+1
             print "Sleeping for "+str(sleepTime)+"s"
             time.sleep(sleepTime)
-	lastRunTime[trial.websiteID] = time.time()
+        lastRunTime[trial.websiteID] = time.time()
         if(trial.numReps > 1):
             tempDNSFile = tempfile.NamedTemporaryFile(delete=False)
             dnsList = getRandomDnsList(defaultResolver,allDnsServers,trial.numReps)
