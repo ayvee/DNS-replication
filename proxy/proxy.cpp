@@ -48,6 +48,12 @@ static int socketToDNSServers;
 static int proxySocket;
 
 static char *hostName = NULL;
+
+//
+// When the proxy is active, a lock file with this file name will be created;
+// it contains server start time and level of replication (see details in main).
+// This lock file will be created under the same directory of the proxy
+// executable.
 static char LOCK_FILE_NAME[] = "proxy_active";
 
 /**
@@ -106,6 +112,10 @@ static uint16_t getNewId()
     }
 }
 
+/**
+ * Given a raw DNS query, return the domain name to be queried
+ * Empty string is returned if any exception occurs
+ */
 static string rebuildQueryName(const char* q)
 {
     const char *name = q + 12;
@@ -143,25 +153,37 @@ void *listenToClients(void *junk)
     struct sockaddr_in otherHostAddr;
     socklen_t slen=sizeof(otherHostAddr);
     int i;
+    int pktSize;
 
     //receive packets from the clients
-    while(1){
+    while(1)
+    {
         memset((void *)&buf, 0x00, BUF_SIZE);
         bzero((char *) &otherHostAddr, sizeof(otherHostAddr)); 
 
-        int pktSize = recvfrom(proxySocket, buf, BUF_SIZE, 0, (struct sockaddr* )&otherHostAddr, &slen);
-        if(pktSize == -1){
+        if(-1 == (pktSize = recvfrom(proxySocket,
+                                     buf,
+                                     BUF_SIZE,
+                                     0,
+                                     (struct sockaddr*)&otherHostAddr,
+                                     &slen)))
+        {
             perror("recvfrom");
-            exit(-1);
+            exit(EXIT_FAILURE);
         }
         if(0 == pktSize)
+        {
             pthread_exit(NULL);
+        }
 
         int clientPort = ntohs(otherHostAddr.sin_port);
         string clientIp(inet_ntoa(otherHostAddr.sin_addr));
         //cerr<<"Client's IP is "<<clientIp<<endl;
         string question = rebuildQueryName(buf);
-        ClientInfo *newClient = new ClientInfo(clientIp, question, clientPort, *(uint16_t*)buf);
+        ClientInfo *newClient = new ClientInfo(clientIp,
+                                               question,
+                                               clientPort,
+                                               *(uint16_t*)buf);
         if(conflictId(*(uint16_t*)buf))
         {
             cerr<<"Transaction ID conflict resolved"<<endl;
@@ -188,7 +210,7 @@ void *listenToClients(void *junk)
                                  slen)) == -1)
                 {
                     perror("Error sendto() to DNS");
-                    exit(-1);
+                    exit(EXIT_FAILURE);
                 }
                 bytesSent += ret;
             }
@@ -209,21 +231,24 @@ void *listenToDnsServers(void *junk){
     //map from client ip to server ip
     //map<string, string> receivedResponse;
 
-    while(1){
+    while(1)
+    {
         char responseBuf[BUF_SIZE];
         memset(responseBuf, 0x00, BUF_SIZE);
-        if((pktSize = recvfrom(socketToDNSServers,
+        if(-1 == (pktSize = recvfrom(socketToDNSServers,
                                responseBuf,
                                BUF_SIZE,
                                0,
                                (struct sockaddr*)&otherHostAddr,
-                               &slen)) == -1)
+                               &slen)))
         {
             perror("recvfrom");
-            exit(-1);
+            exit(EXIT_FAILURE);
         }
         if(0 == pktSize)
+        {
             pthread_exit(NULL);
+        }
         string serverIP(inet_ntoa(otherHostAddr.sin_addr));
         uint16_t responseTransacId = *(uint16_t*)responseBuf;
         //cerr<<"Got response from "<<serverIP<<"!"<<endl;
@@ -256,7 +281,7 @@ void *listenToDnsServers(void *junk){
         //cout<<target->question<<"\t"<<serverIP;
         if (inet_aton((target->ip).c_str(), &client_addr.sin_addr)==0){
             perror("inet_aton");
-            exit(1);
+            exit(EXIT_FAILURE);
         }
         //cout<<"Sending pkt to client "<<client_addr.sin_addr.s_addr<<" on port "<<client_addr.sin_port <<endl;
         int bytesSent = 0, ret;
@@ -270,7 +295,7 @@ void *listenToDnsServers(void *junk){
                              slen_t)) == -1)
             {
                 perror("Erro sendto() to client");
-                exit(1);
+                exit(EXIT_FAILURE);
             }
             bytesSent += ret;
         }
@@ -297,12 +322,12 @@ static void setupClientListenerSocket(void)
 
     if( (proxySocket = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP)) == -1){
         perror("socket");
-        exit(-1);
+        exit(EXIT_FAILURE);
     }
     //bind the socket to the port
     if( bind(proxySocket, (struct sockaddr* )&proxyAddr, sizeof(proxyAddr))  == -1){
         perror("proxyAddr bind");
-        exit(-1);
+        exit(EXIT_FAILURE);
     }
 }
 
@@ -319,7 +344,7 @@ static void setupDnsSenderSocket(void)
 
     if ((socketToDNSServers = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP))==-1){
         perror("socket");
-        exit(-1);
+        exit(EXIT_FAILURE);
     }
 
     //bind the socket to the port
@@ -327,7 +352,7 @@ static void setupDnsSenderSocket(void)
              (struct sockaddr* )&proxySenderAddr,
              sizeof(proxySenderAddr)) == -1){
         perror("proxySender bind");
-        exit(-1);
+        exit(EXIT_FAILURE);
     }
 }
 
@@ -367,7 +392,7 @@ int main(int argc, char **argv){
             default:
                 cerr<<"Unrecognized parameter"<<endl;
                 usage(argv[0]);
-                exit(1);
+                exit(EXIT_FAILURE);
         }
     }
 
@@ -375,14 +400,14 @@ int main(int argc, char **argv){
     {
         cerr<<"Missing DNS file"<<endl;
         usage(argv[0]);
-        exit(1);
+        exit(EXIT_FAILURE);
     }
 
     if(optind < argc)
     {
         cerr<<"Too many argument(s)"<<endl;
         usage(argv[0]);
-        exit(1);
+        exit(EXIT_FAILURE);
     }
 
     if(NULL == (abs_lock_path = (char*)malloc(256)))
@@ -391,43 +416,50 @@ int main(int argc, char **argv){
         exit(EXIT_FAILURE);
     }
 
+    // get the path to proxy executable
     if(-1 == (rv = readlink("/proc/self/exe",abs_lock_path,256)))
     {
         perror("readlink");
         exit(EXIT_FAILURE);
     }
 
+    // null terminate the string
     abs_lock_path[rv] = '\0';
 
+    // make a copy of the path for dirname()
     if(NULL == (temp = strdup(abs_lock_path)))
     {
         perror("strdup");
         exit(EXIT_FAILURE);
     }
 
+    // get the directory path to the executable
     if(NULL == (abs_lock_dir = dirname(temp)))
     {
         perror("dirname");
         exit(EXIT_FAILURE);
     }
 
-    printf("Extracted dir name: %s\n",abs_lock_dir);
-
+    //
+    // construct the absolute path for lock file,
+    // this guarantees the lock will always be under the same
+    // directory as the proxy executable, regardless of the location
+    // where the proxy is launched
+    //
     if(0 > snprintf(abs_lock_path, 256, "%s/%s", abs_lock_dir, LOCK_FILE_NAME))
     {
         perror("snprintf");
         exit(EXIT_FAILURE);
     }
 
+    // don't need this anymore
     free(temp);
 
-    /*
-     * start to read from file
-     */
+    // open the dns file and read in each entry
     ifstream dnsServFile(dnsFile);
     if(!dnsServFile.is_open()){
         cout<<"Cannot open DNS Server file: "<<argv[1]<<endl;
-        exit(-1);
+        exit(EXIT_FAILURE);
     }
 
     //map from server ip address to the sock addr
@@ -445,7 +477,7 @@ int main(int argc, char **argv){
         if (inet_aton(ip.c_str(), &serv_addr.sin_addr)==0){
             fprintf(stderr, "inet_aton() failed errno is %d\n", errno);
             cout << ip << endl;
-            exit(1);
+            exit(EXIT_FAILURE);
         }
         dnsServers.push_back(serv_addr);
     }
@@ -453,12 +485,12 @@ int main(int argc, char **argv){
     if(!(hostName = (char*)malloc(sizeof(char) * MAX_HOSTNAME_LEN)))
     {
         cerr<<"Error mallocing memory for hostname"<<endl;
-        exit(1);
+        exit(EXIT_FAILURE);
     }
     if(gethostname(hostName, MAX_HOSTNAME_LEN))
     {
         cerr<<"Error getting host name"<<endl;
-        exit(1);
+        exit(EXIT_FAILURE);
     }
 
     setupClientListenerSocket();
@@ -479,21 +511,24 @@ int main(int argc, char **argv){
     if(pthread_mutex_init(&mapLock, NULL))
     {
         perror("pthread_mutex_init");
-        exit(-1);
+        exit(EXIT_FAILURE);
     }
     if(pthread_create(&dnsListenerThread, NULL, listenToDnsServers, NULL))
     {
         perror("pthread_create");
-        exit(-1);
+        exit(EXIT_FAILURE);
     }
     if(pthread_create(&clientListenerThread, NULL, listenToClients, NULL))
     {
         perror("pthread_create");
-        exit(-1);
+        exit(EXIT_FAILURE);
     }
 
-    printf("Opening lock file: %s\n",abs_lock_path);
-
+    //
+    // Write the active lock file. File path is constructed above.
+    // The lock contains one line:
+    //          [start start time in us],[replication level]
+    //
     if(NULL == (init_file_lock = fopen(abs_lock_path,"w")))
     {
         perror("fopen");
@@ -535,6 +570,7 @@ int main(int argc, char **argv){
 
     free(hostName);
 
+    // remove the server active file lock
     if(0 != unlink(LOCK_FILE_NAME))
     {
         perror("unlink");
@@ -542,6 +578,5 @@ int main(int argc, char **argv){
     }
 
     cout<<"Proxy terminated"<<endl;
-
     return 0;
 }
