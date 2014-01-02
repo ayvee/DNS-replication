@@ -26,8 +26,8 @@ class Trial:
 def setBrowser():
     global browser
     # switch the commented/uncommented line to change browser
-    browser = webdriver.Firefox()
-    #browser = webdriver.Chrome('./chromedriver')
+    #browser = webdriver.Firefox()
+    browser = webdriver.Chrome('./chromedriver')
 
 def getURL(website):
     return "http://"+website

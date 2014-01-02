@@ -299,10 +299,10 @@ void *listenToDnsServers(void *junk){
             }
             bytesSent += ret;
         }
-        printf("%-30s%-20s%lu\n",
+        /*printf("%-30s%-20s%lu\n",
                target->question.c_str(),
                serverIP.c_str(),
-               (unsigned long)target->getQueryDuration());
+               (unsigned long)target->getQueryDuration());*/
         delete target;
     }
 }
@@ -503,10 +503,10 @@ int main(int argc, char **argv){
     pthread_t dnsListenerThread;
 
     //print out formatting info
-    printf("%-30s%-20s%s\n",
+    /*printf("%-30s%-20s%s\n",
            "Query",
            "First Responder",
-           "Time elapsed (micro seconds)");
+           "Time elapsed (micro seconds)");*/
 
     if(pthread_mutex_init(&mapLock, NULL))
     {
