@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 import os
 import sys
 import time
@@ -8,11 +9,14 @@ import httplib
 import tempfile
 import subprocess
 import Queue
-from datetime import datetime
+from datetime import datetime, timedelta
 from selenium import webdriver
 from selenium.webdriver.support.ui import WebDriverWait
 
-iterations = 1
+import logging
+logging.basicConfig(level = logging.INFO, format = "[%(asctime)s] %(levelname)s: %(message)s")
+log = logging.getLogger()
+
 # we will load no more than one page every minTrialDuration seconds to avoid
 # overloading the local DNS server
 minTrialDuration = 30
@@ -29,6 +33,9 @@ def getURL(website):
     return "http://"+website
 
 def getDefaultResolver():
+    from shutil import copy as cp
+    if not os.path.isfile("/etc/resolv.conf.orig"):
+        cp("/etc/resolv.conf", "/etc/resolv.conf.orig")
     resolvFile = open("/etc/resolv.conf",'r')
     rv = ""
     for line in resolvFile:
@@ -38,8 +45,11 @@ def getDefaultResolver():
         if line[:11] == "nameserver ":
             rv = line[11:]
     resolvFile.close()
-    if(rv == ""):
-        print "Failed to get default resolver"
+    if rv == "":
+        log.error("Failed to get default resolver")
+        exit(1)
+    if rv == "127.0.0.1" or rv == "localhost":
+        log.error("Default resolver is localhost: something went wrong")
         exit(1)
     return rv
 
@@ -63,16 +73,17 @@ def getDownloadTimeWebdriver(driver, url):
     succeeded = False
     downloadTime = 0
     numRetries = 0
-    print "Downloading "+str(url)
+    log.info("Downloading "+str(url))
     #start = datetime.now()
     try:
         driver.get(url)
-        wait = WebDriverWait(driver, downloadTimeoutSec, poll_frequency=5)\
-            .until(lambda drv: drv.execute_script("return document.readyState") == "complete")
-        return float(driver.execute_script("performance.timing.loadEventEnd - performance.timing.navigationStart"))
+        wait = WebDriverWait(driver, downloadTimeoutSec, poll_frequency=5).\
+                until(lambda drv: drv.execute_script("return document.readyState") == "complete")
+        exectime = driver.execute_script("return performance.timing.loadEventEnd - performance.timing.navigationStart")
+        return float(exectime) * 1e-3
     except Exception as e:
-        print e
-        return downloadTimeoutSec*1000*1000
+        log.error(e)
+        return downloadTimeoutSec
     #end = datetime.now()
     #diff = end - start
     #downloadTime = diff.seconds * 1000 * 1000 + diff.microseconds
@@ -80,7 +91,7 @@ def getDownloadTimeWebdriver(driver, url):
 def setResolver(resolver):
     rv = os.system("echo \"nameserver "+str(resolver)+"\" > /etc/resolv.conf")
     if rv != 0:
-        print "failed to set resolver to "+str(resolver)
+        log.error("failed to set resolver to "+str(resolver))
         exit(1)
 
 def getRandomDnsList(defaultDns,lst,numNeeded):
@@ -118,8 +129,8 @@ def writeResult(trial,time,fileHandle):
 
 def main():
     if len(sys.argv) != 5:
-        print "incorrect args"
-        exit()
+        print "SYNTAX: %s <proxy_binary> <proxy_lock_file> <dns_servers_list> <domains_list>" % sys.argv[0]
+        exit(2)
 
     if os.getuid() != 0:
         print "Needs root permission"
@@ -135,7 +146,7 @@ def main():
 
     DEVNULL = open(os.devnull,'wb')
 
-    print "Default resolver: "+defaultResolver
+    log.info("Default resolver: "+defaultResolver)
 
     for thisDomain in domainListFile:
         allDomains.append(thisDomain.rstrip())
@@ -150,10 +161,10 @@ def main():
     resultCollector = None
     try:
         driver = getDefaultBrowser()
-        resultCollector = ResultCollector(allDnsServers.size() + 1)
+        resultCollector = ResultCollector(len(allDnsServers) + 1)
         while True:
-            currTime = time.time()
-            numReps = random.randint(1, allDnsServers.size() + 1)
+            currTime = datetime.now()
+            numReps = random.randint(1, len(allDnsServers) + 1)
             website = random.choice(allDomains)
     
             if(numReps > 1):
@@ -183,18 +194,21 @@ def main():
                     finally:
                         time.sleep(0.1)
     
-                runtime = getDownloadTimeWebdriver(getURL(website))
+                runtime = getDownloadTimeWebdriver(driver, getURL(website))
     #            runtime = getDownloadTimeWget(getURL(allDomains[trial.websiteID]))
                 assert proxy.returncode is None
-                writeResult(numReps, website, runtime)
                 os.kill(proxy.pid,signal.SIGQUIT)
                 proxy.wait()
                 os.remove(tempDNSFile.name)
             else:
                 setResolver(defaultResolver)
-                runtime = getDownloadTimeWebdriver(getURL(website))
+                runtime = getDownloadTimeWebdriver(driver, getURL(website))
     #            runtime = getDownloadTimeWget(getURL(allDomains[trial.websiteID]))
-                resultCollector.update(numReps, website, runtime)
+            resultCollector.update(numReps, website, runtime)
+            nextTrialAt = currTime + timedelta(seconds = minTrialDuration)
+            sleepDuration = (nextTrialAt - datetime.now()).total_seconds()
+            if sleepDuration > 0:
+                time.sleep(sleepDuration)
     finally:
         if driver is not None:
             driver.close()
@@ -203,5 +217,5 @@ def main():
         setResolver(defaultResolver)
     DEVNULL.close()
 
-if(__name__ == '__main__'):
+if __name__ == '__main__':
     main()
