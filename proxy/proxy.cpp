@@ -562,7 +562,6 @@ int main(int argc, char **argv){
     }
 
     free(print_str);
-    free(abs_lock_path);
 
     pthread_join(dnsListenerThread, NULL);
     pthread_join(clientListenerThread, NULL);
@@ -571,11 +570,12 @@ int main(int argc, char **argv){
     free(hostName);
 
     // remove the server active file lock
-    if(0 != unlink(LOCK_FILE_NAME))
+    if(0 != unlink(abs_lock_path))
     {
         perror("unlink");
         exit(EXIT_FAILURE);
     }
+    free(abs_lock_path);
 
     cout<<"Proxy terminated"<<endl;
     return 0;

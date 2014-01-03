@@ -68,22 +68,30 @@ def getDownloadTimeWget(url):
     os.chdir("..")
     return diff.seconds*1000000+diff.microseconds
 
-def getDownloadTimeWebdriver(driver, url):
+def getDownloadTimeWebdriver(url):
     downloadTimeoutSec = 20
     succeeded = False
     downloadTime = 0
     numRetries = 0
     log.info("Downloading "+str(url))
     #start = datetime.now()
+    driver = None
     try:
+        driver = getDefaultBrowser()
+        time.sleep(5) # for browser init
         driver.get(url)
         wait = WebDriverWait(driver, downloadTimeoutSec, poll_frequency=5).\
                 until(lambda drv: drv.execute_script("return document.readyState") == "complete")
-        exectime = driver.execute_script("return performance.timing.loadEventEnd - performance.timing.navigationStart")
-        return float(exectime) * 1e-3
+        if not wait:
+            return downloadTimeoutSec
+        else:
+            exectime = driver.execute_script("return performance.timing.loadEventEnd - performance.timing.navigationStart")
+            return float(exectime) * 1e-3
     except Exception as e:
         log.error(e)
         return downloadTimeoutSec
+    finally:
+        driver.quit()
     #end = datetime.now()
     #diff = end - start
     #downloadTime = diff.seconds * 1000 * 1000 + diff.microseconds
@@ -94,11 +102,10 @@ def setResolver(resolver):
         log.error("failed to set resolver to "+str(resolver))
         exit(1)
 
-def getRandomDnsList(defaultDns,lst,numNeeded):
-    if(numNeeded > len(lst)):
-        numNeeded = len(lst)
-    random.shuffle(lst)
-    return [defaultDns] + lst[:numNeeded-1]
+def getDnsList(lst, numNeeded):
+    # disabling randomization for now, need to think about whether it's desirable
+    #random.shuffle(lst)
+    return lst[:numNeeded]
 
 # TODO: may want to make this a context manager instead of the explicit done()
 # potential TODO: have collector buffer results in memory and output stats
@@ -106,11 +113,11 @@ def getRandomDnsList(defaultDns,lst,numNeeded):
 class ResultCollector:
     def __init__(self, maxNumReps = None, outputFilenameFormat = outputFilenames):
         self.outputFilenameFormat = outputFilenameFormat
-        if maxNumReps is not None:
-            # truncate all output files
-            for n in xrange(1, maxNumReps+1):
-                with open(self.outputFilenameFormat % n, 'w'):
-                    pass
+        #if maxNumReps is not None:
+        #    # truncate all output files
+        #    for n in xrange(1, maxNumReps+1):
+        #        with open(self.outputFilenameFormat % n, 'w'):
+        #            pass
 
     def update(self, numReps, website, time):
         with open(self.outputFilenameFormat % numReps, 'a') as outf:
@@ -119,11 +126,51 @@ class ResultCollector:
     def done(self):
         pass
 
-def writeResult(trial,time,fileHandle):
-    string = str(trial.numReps)+","+str(allDomains[trial.websiteID])+","+str(time)
-    fileHandle.write(string+"\n")
-    fileHandle.flush()
-    os.fsync(fileHandle)
+class Proxy:
+    def __init__(self, proxyBin, proxyLockFile, dnsServers, outputFD):
+        self.proxyBin = proxyBin
+        self.proxyLockFile = proxyLockFile
+        self.dnsServers = dnsServers
+        self.outputFD = outputFD
+        self.process = None
+
+    def __enter__(self):
+        self.dnsFile = dnsFile = tempfile.NamedTemporaryFile(delete=False)
+        dnsFile.write("\n".join(self.dnsServers) + '\n')
+        dnsFile.close()
+
+        try:
+            setResolver("127.0.0.1")
+            log.debug("%s -f %s" % (self.proxyBin, dnsFile.name))
+            self.process = subprocess.Popen([self.proxyBin,'-f', dnsFile.name], stdout = self.outputFD, stderr = self.outputFD)
+        except:
+            os.unlink(dnsFile.name)
+            raise
+        return self
+
+    def waitTillSetUp(self):
+        "wait for proxy to come up"
+        while True:
+            try:
+                with open(self.proxyLockFile, 'r') as lockf:
+                    content = lockf.readline().split(',')
+                    startTime = int(content[0])
+                    replication = int(content[1])
+                    if replication == len(self.dnsServers):
+                        break
+            except IOError as e:
+                time.sleep(0.1)
+
+    def __exit__(self, typ, value, traceback):
+        try:
+            process = self.process
+            if process.returncode is not None:
+                log.error("Proxy process died before we were done with it")
+            else:
+                os.kill(process.pid,signal.SIGQUIT)
+                process.wait()
+        finally:
+            os.unlink(self.dnsFile.name)
 
 ################################################################################
 
@@ -147,6 +194,7 @@ def main():
     DEVNULL = open(os.devnull,'wb')
 
     log.info("Default resolver: "+defaultResolver)
+    allDnsServers.append(defaultResolver)
 
     for thisDomain in domainListFile:
         allDomains.append(thisDomain.rstrip())
@@ -157,62 +205,34 @@ def main():
     dnsListFile.close()
     domainListFile.close()
 
-    driver = None
     resultCollector = None
     try:
-        driver = getDefaultBrowser()
-        resultCollector = ResultCollector(len(allDnsServers) + 1)
+        resultCollector = ResultCollector(len(allDnsServers))
         while True:
             currTime = datetime.now()
-            numReps = random.randint(1, len(allDnsServers) + 1)
+            
+            numReps = random.randint(1, len(allDnsServers))
             website = random.choice(allDomains)
-    
+            def doLookup(numReps, website):
+                runtime = getDownloadTimeWebdriver(getURL(website))
+                #runtime = getDownloadTimeWget(getURL(allDomains[trial.websiteID]))
+                resultCollector.update(numReps, website, runtime)
             if(numReps > 1):
-                tempDNSFile = tempfile.NamedTemporaryFile(delete=False)
-                dnsList = getRandomDnsList(defaultResolver, allDnsServers, numReps)
-                for i in dnsList:
-                    tempDNSFile.write(i+"\n")
-                tempDNSFile.close()
-    
-                proxy = subprocess.Popen([proxyBin,'-f',tempDNSFile.name], stdout=DEVNULL, stderr=DEVNULL)
-                setResolver("127.0.0.1")
-    
-                # make sure the server is up by checking its active lock file
-                lockFile = None
-                while True:
-                    try:
-                        lockFile = open(proxyLockFilePath,'r')
-                        break
-                    except IOError:
-                        pass
-                    else:
-                        content = lockFile.readline().split(',')
-                        startTime = int(content[0])
-                        replication = int(content[1])
-                        if replication == numReps:
-                            break
-                    finally:
-                        time.sleep(0.1)
-    
-                runtime = getDownloadTimeWebdriver(driver, getURL(website))
-    #            runtime = getDownloadTimeWget(getURL(allDomains[trial.websiteID]))
-                assert proxy.returncode is None
-                os.kill(proxy.pid,signal.SIGQUIT)
-                proxy.wait()
-                os.remove(tempDNSFile.name)
+                dnsServers = getDnsList(allDnsServers, numReps)
+                log.debug("%d servers: %s; allDnsServers = %s", numReps, dnsServers, allDnsServers)
+                with Proxy(proxyBin, proxyLockFilePath, dnsServers, DEVNULL) as proxy:
+                    proxy.waitTillSetUp()
+                    doLookup(numReps, website)
             else:
                 setResolver(defaultResolver)
-                runtime = getDownloadTimeWebdriver(driver, getURL(website))
-    #            runtime = getDownloadTimeWget(getURL(allDomains[trial.websiteID]))
-            resultCollector.update(numReps, website, runtime)
+                doLookup(numReps, website)
+
             nextTrialAt = currTime + timedelta(seconds = minTrialDuration)
             sleepDuration = (nextTrialAt - datetime.now()).total_seconds()
             if sleepDuration > 0:
                 time.sleep(sleepDuration)
     finally:
         setResolver(defaultResolver)
-        if driver is not None:
-            driver.close()
         if resultCollector is not None:
             resultCollector.done()
     DEVNULL.close()
