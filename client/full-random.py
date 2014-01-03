@@ -20,7 +20,7 @@ log = logging.getLogger()
 # we will load no more than one page every minTrialDuration seconds to avoid
 # overloading the local DNS server
 minTrialDuration = 30
-outputFilenames = "result%d.csv"
+outputFilenames = "/proj/UIUCScheduling/dns/results/result%d.csv"
 
 proxyLockFilePath = ""
 allDomains = []
