@@ -210,11 +210,11 @@ def main():
             if sleepDuration > 0:
                 time.sleep(sleepDuration)
     finally:
+        setResolver(defaultResolver)
         if driver is not None:
             driver.close()
         if resultCollector is not None:
             resultCollector.done()
-        setResolver(defaultResolver)
     DEVNULL.close()
 
 if __name__ == '__main__':
