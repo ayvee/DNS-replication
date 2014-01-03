@@ -14,3 +14,4 @@ sudo mke2fs -j /dev/sdb1
 sudo mkdir -p /local/dns
 sudo mount /dev/sdb1 /local/dns
 sudo chown -R vulimir1:UIUCScheduling /local/dns
+git clone https://github.com/ayvee/DNS-replication.git code
