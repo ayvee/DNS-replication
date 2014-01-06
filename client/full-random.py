@@ -20,7 +20,7 @@ log = logging.getLogger()
 # we will load no more than one page every minTrialDuration seconds to avoid
 # overloading the local DNS server
 minTrialDuration = 30
-outputFilenames = "/proj/UIUCScheduling/dns/results/result%d.csv"
+outputFilenames = "results/result%d.csv"
 
 proxyLockFilePath = ""
 allDomains = []
@@ -159,7 +159,7 @@ class Proxy:
                     if replication == len(self.dnsServers):
                         break
             except IOError as e:
-                time.sleep(0.1)
+                time.sleep(0.5)
 
     def __exit__(self, typ, value, traceback):
         try:
