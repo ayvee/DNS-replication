@@ -19,7 +19,7 @@ log = logging.getLogger()
 
 # we will load no more than one page every minTrialDuration seconds to avoid
 # overloading the local DNS server
-minTrialDuration = 30
+minTrialDuration = 0
 outputFilenames = "results/result%d.csv"
 
 proxyLockFilePath = ""
@@ -69,7 +69,7 @@ def getDownloadTimeWget(url):
     return diff.seconds*1000000+diff.microseconds
 
 def getDownloadTimeWebdriver(url):
-    downloadTimeoutSec = 20
+    downloadTimeoutSec = 60
     succeeded = False
     downloadTime = 0
     numRetries = 0
@@ -110,7 +110,7 @@ def getDnsList(lst, numNeeded):
 # TODO: may want to make this a context manager instead of the explicit done()
 # potential TODO: have collector buffer results in memory and output stats
 #                 directly at the end using the classes from util.py
-class ResultCollector:
+class ResultsCollector:
     def __init__(self, maxNumReps = None, outputFilenameFormat = outputFilenames):
         self.outputFilenameFormat = outputFilenameFormat
         #if maxNumReps is not None:
@@ -205,9 +205,9 @@ def main():
     dnsListFile.close()
     domainListFile.close()
 
-    resultCollector = None
+    resultsCollector = None
     try:
-        resultCollector = ResultCollector(len(allDnsServers))
+        resultsCollector = ResultsCollector(len(allDnsServers))
         while True:
             currTime = datetime.now()
             
@@ -216,7 +216,7 @@ def main():
             def doLookup(numReps, website):
                 runtime = getDownloadTimeWebdriver(getURL(website))
                 #runtime = getDownloadTimeWget(getURL(allDomains[trial.websiteID]))
-                resultCollector.update(numReps, website, runtime)
+                resultsCollector.update(numReps, website, runtime)
             if(numReps > 1):
                 dnsServers = getDnsList(allDnsServers, numReps)
                 log.debug("%d servers: %s; allDnsServers = %s", numReps, dnsServers, allDnsServers)
@@ -233,8 +233,8 @@ def main():
                 time.sleep(sleepDuration)
     finally:
         setResolver(defaultResolver)
-        if resultCollector is not None:
-            resultCollector.done()
+        if resultsCollector is not None:
+            resultsCollector.done()
     DEVNULL.close()
 
 if __name__ == '__main__':
