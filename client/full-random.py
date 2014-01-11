@@ -21,9 +21,10 @@ log = logging.getLogger()
 # overloading the local DNS server
 minTrialDuration = 0
 outputFilenames = "results/result%d.csv"
+basedir = os.path.dirname(sys.argv[0])
+proxyBin = basedir + "../proxy/proxy"
+proxyLockfile = basedir + "../proxy/proxy_active"
 
-proxyLockFilePath = ""
-allDomains = []
 
 def getDefaultBrowser():
     #return webdriver.Firefox()
@@ -108,8 +109,6 @@ def getDnsList(lst, numNeeded):
     return lst[:numNeeded]
 
 # TODO: may want to make this a context manager instead of the explicit done()
-# potential TODO: have collector buffer results in memory and output stats
-#                 directly at the end using the classes from util.py
 class ResultsCollector:
     def __init__(self, maxNumReps = None, outputFilenameFormat = outputFilenames):
         self.outputFilenameFormat = outputFilenameFormat
@@ -127,9 +126,9 @@ class ResultsCollector:
         pass
 
 class Proxy:
-    def __init__(self, proxyBin, proxyLockFile, dnsServers, outputFD):
+    def __init__(self, proxyBin, proxyLockfile, dnsServers, outputFD):
         self.proxyBin = proxyBin
-        self.proxyLockFile = proxyLockFile
+        self.proxyLockfile = proxyLockfile
         self.dnsServers = dnsServers
         self.outputFD = outputFD
         self.process = None
@@ -152,7 +151,7 @@ class Proxy:
         "wait for proxy to come up"
         while True:
             try:
-                with open(self.proxyLockFile, 'r') as lockf:
+                with open(self.proxyLockfile, 'r') as lockf:
                     content = lockf.readline().split(',')
                     startTime = int(content[0])
                     replication = int(content[1])
@@ -175,21 +174,19 @@ class Proxy:
 ################################################################################
 
 def main():
-    if len(sys.argv) != 5:
-        print "SYNTAX: %s <proxy_binary> <proxy_lock_file> <dns_servers_list> <domains_list>" % sys.argv[0]
+    if len(sys.argv) != 3:
+        print "SYNTAX: %s <dns_servers_list> <domains_list>" % sys.argv[0]
         exit(2)
 
     if os.getuid() != 0:
         print "Needs root permission"
         exit()
 
-    proxyBin = sys.argv[1]
-    proxyLockFilePath = sys.argv[2]
-    dnsListFile = open(sys.argv[3])
-    domainListFile = open(sys.argv[4])
+    dnsListFile = open(sys.argv[1])
+    domainListFile = open(sys.argv[2])
     defaultResolver = getDefaultResolver()
-    allTrials = []
     allDnsServers = []
+    allDomains = []
 
     DEVNULL = open(os.devnull,'wb')
 
@@ -220,7 +217,7 @@ def main():
             if(numReps > 1):
                 dnsServers = getDnsList(allDnsServers, numReps)
                 log.debug("%d servers: %s; allDnsServers = %s", numReps, dnsServers, allDnsServers)
-                with Proxy(proxyBin, proxyLockFilePath, dnsServers, DEVNULL) as proxy:
+                with Proxy(proxyBin, proxyLockfile, dnsServers, DEVNULL) as proxy:
                     proxy.waitTillSetUp()
                     doLookup(numReps, website)
             else:
