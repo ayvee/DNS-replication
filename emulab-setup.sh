@@ -8,7 +8,7 @@ sudo mkdir -p /local/dns
 sudo mount /dev/sdb1 /local/dns
 sudo chown -R vulimir1:UIUCScheduling /local/dns
 git clone https://github.com/ayvee/DNS-replication.git code
-ln -s /proj/UIUCScheduling/dns/results /local/dns/code/proxy/client/results
+ln -s /proj/UIUCScheduling/dns/results /local/dns/code/client/results
 cd /local/dns/code/proxy
 make
 
