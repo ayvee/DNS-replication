@@ -109,7 +109,7 @@ def getDownloadTimeWebdriver(url):
     finally:
         if driver != None:
             driver.quit()
-        system(["pkill", "-9", "-f", "chrome"])
+        subprocess.call(["pkill", "-9", "-f", "chrome"])
     #end = datetime.now()
     #diff = end - start
     #downloadTime = diff.seconds * 1000 * 1000 + diff.microseconds
