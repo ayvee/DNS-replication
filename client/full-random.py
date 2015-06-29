@@ -69,6 +69,20 @@ def getDownloadTimeWget(url):
     os.chdir("..")
     return diff.seconds*1000000+diff.microseconds
 
+class Timeout:
+    def __init__(self, seconds):
+        self.seconds = seconds
+
+    def handle_timeout(self, signum, frame):
+        raise Exception('Function timed out')
+
+    def __enter__(self):
+        signal.signal(signal.SIGALRM, self.handle_timeout)
+        signal.alarm(self.seconds)
+
+    def __exit__(self, type, value, traceback):
+        signal.alarm(0)
+
 def getDownloadTimeWebdriver(url):
     downloadTimeoutSec = 60
     succeeded = False
@@ -78,21 +92,24 @@ def getDownloadTimeWebdriver(url):
     #start = datetime.now()
     driver = None
     try:
-        driver = getDefaultBrowser()
-        time.sleep(5) # for browser init
-        driver.get(url)
-        wait = WebDriverWait(driver, downloadTimeoutSec, poll_frequency=5).\
-                until(lambda drv: drv.execute_script("return document.readyState") == "complete")
-        if not wait:
-            return downloadTimeoutSec
-        else:
-            exectime = driver.execute_script("return performance.timing.loadEventEnd - performance.timing.navigationStart")
-            return float(exectime) * 1e-3
+        with Timeout(2 * downloadTimeoutSec):
+            driver = getDefaultBrowser()
+            time.sleep(5) # for browser init
+            driver.get(url)
+            wait = WebDriverWait(driver, downloadTimeoutSec, poll_frequency=5).\
+                    until(lambda drv: drv.execute_script("return document.readyState") == "complete")
+            if not wait:
+                return downloadTimeoutSec
+            else:
+                exectime = driver.execute_script("return performance.timing.loadEventEnd - performance.timing.navigationStart")
+                return float(exectime) * 1e-3
     except Exception as e:
         log.error(e)
         return downloadTimeoutSec
     finally:
-        driver.quit()
+        if driver != None:
+            driver.quit()
+        system(["pkill", "-9", "-f", "chrome"])
     #end = datetime.now()
     #diff = end - start
     #downloadTime = diff.seconds * 1000 * 1000 + diff.microseconds
