@@ -14,16 +14,16 @@ from selenium import webdriver
 from selenium.webdriver.support.ui import WebDriverWait
 
 import logging
-logging.basicConfig(level = logging.INFO, format = "[%(asctime)s] %(levelname)s: %(message)s")
+logging.basicConfig(level = logging.DEBUG, format = "[%(asctime)s] %(levelname)s: %(message)s")
 log = logging.getLogger()
 
 # we will load no more than one page every minTrialDuration seconds to avoid
 # overloading the local DNS server
 minTrialDuration = 0
 outputFilenames = "results/result%d.csv"
-basedir = os.path.dirname(sys.argv[0])
-proxyBin = basedir + "../proxy/proxy"
-proxyLockfile = basedir + "../proxy/proxy_active"
+basedir = os.path.dirname(os.path.abspath(__file__))
+proxyBin = basedir + "/../proxy/proxy"
+proxyLockfile = basedir + "/../proxy/proxy_active"
 
 
 def getDefaultBrowser():
