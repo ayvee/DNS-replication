@@ -137,7 +137,7 @@ static string rebuildQueryName(const char* q)
     }
     catch(...)
     {
-        cerr << "EXCEPTION CAUGHT!" << endl;
+        cout << "EXCEPTION CAUGHT!" << endl;
         return string("");
     }
     return ret;
@@ -148,6 +148,7 @@ static string rebuildQueryName(const char* q)
  */
 void *listenToClients(void *junk)
 {
+	(void)junk;
     //used to hold details of the other host
     char buf[BUF_SIZE];
     struct sockaddr_in otherHostAddr;
@@ -178,7 +179,7 @@ void *listenToClients(void *junk)
 
         int clientPort = ntohs(otherHostAddr.sin_port);
         string clientIp(inet_ntoa(otherHostAddr.sin_addr));
-        //cerr<<"Client's IP is "<<clientIp<<endl;
+        //cout<<"Client's IP is "<<clientIp<<endl;
         string question = rebuildQueryName(buf);
         ClientInfo *newClient = new ClientInfo(clientIp,
                                                question,
@@ -186,7 +187,7 @@ void *listenToClients(void *junk)
                                                *(uint16_t*)buf);
         if(conflictId(*(uint16_t*)buf))
         {
-            cerr<<"Transaction ID conflict resolved"<<endl;
+            cout<<"Transaction ID conflict resolved"<<endl;
             *(uint16_t*)buf = getNewId();
             newClient->reassignId(*(uint16_t*)buf);
         }
@@ -222,6 +223,7 @@ void *listenToClients(void *junk)
  * Server listener thread
  */
 void *listenToDnsServers(void *junk){
+	(void)junk;
     int pktSize;
 
     //used to hold details of the other host
@@ -251,7 +253,7 @@ void *listenToDnsServers(void *junk){
         }
         string serverIP(inet_ntoa(otherHostAddr.sin_addr));
         uint16_t responseTransacId = *(uint16_t*)responseBuf;
-        //cerr<<"Got response from "<<serverIP<<"!"<<endl;
+        //cout<<"Got response from "<<serverIP<<"!"<<endl;
 
         LOCK_MUTEX(&mapLock);
         map<uint16_t, ClientInfo*>::iterator res =
@@ -303,6 +305,7 @@ void *listenToDnsServers(void *junk){
                target->question.c_str(),
                serverIP.c_str(),
                (unsigned long)target->getQueryDuration());*/
+		cerr << target->question << "," << ((unsigned long)target->getQueryDuration());
         delete target;
     }
 }
@@ -361,6 +364,7 @@ static void setupDnsSenderSocket(void)
  */
 static void sigq_handler(int sig)
 {
+	(void)sig;
     shutdown(socketToDNSServers, SHUT_RDWR);
     shutdown(proxySocket, SHUT_RDWR);
 }

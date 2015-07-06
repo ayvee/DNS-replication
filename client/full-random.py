@@ -21,6 +21,7 @@ log = logging.getLogger()
 # overloading the local DNS server
 minTrialDuration = 0
 outputFilenames = "results/result%d.csv"
+proxyFilenames = "results/proxy%d.csv"
 basedir = os.path.dirname(os.path.abspath(__file__))
 proxyBin = basedir + "/../proxy/proxy"
 proxyLockfile = basedir + "/../proxy/proxy_active"
@@ -120,10 +121,9 @@ def setResolver(resolver):
         log.error("failed to set resolver to "+str(resolver))
         exit(1)
 
-def getDnsList(lst, numNeeded):
-    # disabling randomization for now, need to think about whether it's desirable
-    #random.shuffle(lst)
-    return lst[:numNeeded]
+def getDnsList(localServer, publicServers, numNeeded):
+    random.shuffle(publicServers)
+    return ([localServer] + publicServers)[:numNeeded]
 
 # TODO: may want to make this a context manager instead of the explicit done()
 class ResultsCollector:
@@ -143,11 +143,12 @@ class ResultsCollector:
         pass
 
 class Proxy:
-    def __init__(self, proxyBin, proxyLockfile, dnsServers, outputFD):
+    def __init__(self, proxyBin, proxyLockfile, dnsServers, stdoutFD, stderrFile):
         self.proxyBin = proxyBin
         self.proxyLockfile = proxyLockfile
         self.dnsServers = dnsServers
-        self.outputFD = outputFD
+        self.stdoutFD = stdoutFD
+        self.stderrFile = stderrFile
         self.process = None
 
     def __enter__(self):
@@ -158,7 +159,8 @@ class Proxy:
         try:
             setResolver("127.0.0.1")
             log.debug("%s -f %s" % (self.proxyBin, dnsFile.name))
-            self.process = subprocess.Popen([self.proxyBin,'-f', dnsFile.name], stdout = self.outputFD, stderr = self.outputFD)
+            self.stderrFD = open(self.stderrFile, 'a')
+            self.process = subprocess.Popen([self.proxyBin,'-f', dnsFile.name], stdout = self.stdoutFD, stderr = self.stderrFD)
         except:
             os.unlink(dnsFile.name)
             raise
@@ -179,6 +181,8 @@ class Proxy:
 
     def __exit__(self, typ, value, traceback):
         try:
+            if self.stderrFD is not None:
+                self.stderrFD.close()
             process = self.process
             if process.returncode is not None:
                 log.error("Proxy process died before we were done with it")
@@ -203,6 +207,7 @@ def main():
     domainListFile = open(sys.argv[2])
     defaultResolver = getDefaultResolver()
     allDnsServers = []
+    publicDnsServers = []
     allDomains = []
 
     DEVNULL = open(os.devnull,'wb')
@@ -214,6 +219,7 @@ def main():
         allDomains.append(thisDomain.rstrip())
 
     for thisServer in dnsListFile:
+        publicDnsServers.append(thisServer.rstrip())
         allDnsServers.append(thisServer.rstrip())
 
     dnsListFile.close()
@@ -231,10 +237,11 @@ def main():
                 runtime = getDownloadTimeWebdriver(getURL(website))
                 #runtime = getDownloadTimeWget(getURL(allDomains[trial.websiteID]))
                 resultsCollector.update(numReps, website, runtime)
-            if(numReps > 1):
-                dnsServers = getDnsList(allDnsServers, numReps)
+            #if(numReps > 1):
+            if(numReps > 0): # FIXME
+                dnsServers = getDnsList(defaultResolver, publicDnsServers, numReps)
                 log.debug("%d servers: %s; allDnsServers = %s", numReps, dnsServers, allDnsServers)
-                with Proxy(proxyBin, proxyLockfile, dnsServers, DEVNULL) as proxy:
+                with Proxy(proxyBin, proxyLockfile, dnsServers, stdoutFD = DEVNULL, stderrFile = proxyFilenames % numReps) as proxy:
                     proxy.waitTillSetUp()
                     doLookup(numReps, website)
             else:
