@@ -305,7 +305,7 @@ void *listenToDnsServers(void *junk){
                target->question.c_str(),
                serverIP.c_str(),
                (unsigned long)target->getQueryDuration());*/
-		cerr << target->question << "," << ((unsigned long)target->getQueryDuration());
+		cerr << target->question << "," << ((unsigned long)target->getQueryDuration()) << endl;
         delete target;
     }
 }
