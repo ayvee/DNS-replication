@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 import os, subprocess, sys
 import pickle, json
+from multiprocessing import Pool
 
 basedir = os.path.dirname(os.path.abspath(__file__))
 
@@ -20,7 +21,7 @@ class Info(object):
 	def dump(self):
 		print self.info
 		with open(self.info_file, 'w') as outf:
-			json.dump(self.info, outf)
+			json.dump(self.info, outf, sort_keys = True, indent = 4, separators = (',', ': '))
 
 	def create_instance(self, region):
 		if region in self.info:
@@ -31,10 +32,10 @@ class Info(object):
 	
 	def kill_instance(self, region):
 		if region not in self.info:
-			raise Exception("instance does exists in %s" % region)
+			raise Exception("instance doesn't exist in %s" % region)
 		del self.info[region]
 
-	def update(self):
+	def update_info(self):
 		for region, info in self.info.iteritems():
 			try:
 				for line in subprocess.check_output(["ec2-describe-instances", "--region", region]).split("\n"):
@@ -51,22 +52,41 @@ class Info(object):
 				continue
 		self.dump()
 
+	def run(self, cmd, args):
+		try:
+			func = getattr(self, cmd)
+		except AttributeError:
+			raise Exception("Invalid command %s" % cmd)
+		else:
+			func(*args)
+
 	def vnc(self, region):
+		if region not in self.info:
+			raise Exception("no instance in region %s" % region)
 		subprocess.call(["open", "vnc://" + self.info[region]['hostname']])
 
-	def ssh(self, region, args):
-		subprocess.call(["ssh", "-oStrictHostKeyChecking=no", "-lubuntu", self.info[region]['hostname']] + args)
+	def ssh(self, region, *args):
+		if region not in self.info:
+			raise Exception("no instance in region %s" % region)
+		subprocess.call(["ssh", "-oStrictHostKeyChecking=no", "-lubuntu", self.info[region]['hostname']] + list(args))
 
-	def scp(self, region, args):
+	def scp(self, region, *args):
+		if region not in self.info:
+			raise Exception("no instance in region %s" % region)
+		args = list(args) # convert from tuple
 		for i in xrange(len(args)):
 			args[i] = args[i].replace("amhost", "ubuntu@" + self.info[region]['hostname'])
 		subprocess.call(["scp", "-oStrictHostKeyChecking=no"] + args)
 
 	def setup_firewall(self, region):
+		if region not in self.info:
+			raise Exception("no instance in region %s" % region)
 		for port in 22, 5900:
 			subprocess.call(["ec2-authorize", self.info[region]['security-group'], "-P", "tcp", "-p", str(port), "-s", "0.0.0.0/0", "--region", region])
 
 	def setup_host(self, region):
+		if region not in self.info:
+			raise Exception("no instance in region %s" % region)
 		self.scp(region, ["ec2-setup.sh", "amhost:~"])
 		self.ssh(region, ["./ec2-setup.sh"])
 
@@ -74,29 +94,36 @@ class Info(object):
 		self.setup_firewall(region)
 		self.setup_host(region)
 
-	def hostname(self, region):
-		print self.info[region]['hostname']
+	def print_regions(self):
+		for region in self.info:
+			print region
+
 
 def syntax_error():
-	print "SYNTAX: $0 <update_info|vnc|ssh|scp|setup|hostname> [region] [...]"
+	print "SYNTAX: $0 <group> <cmd> [arg] [arg...]"
 	sys.exit(2)
 
-if len(sys.argv) < 3:
-	syntax_error()
-group = sys.argv[1]
-info = Info(group)
-cmd = sys.argv[2]
-if cmd == "update_info":
-	info.update()
-elif cmd == "vnc":
-	info.vnc(sys.argv[2])
-elif cmd == "ssh":
-	info.ssh(sys.argv[2], sys.argv[3:])
-elif cmd == "scp":
-	info.scp(sys.argv[2], sys.argv[3:])
-elif cmd == "setup":
-	info.setup(sys.argv[2])
-elif cmd == "hostname":
-	info.hostname(sys.argv[2])
-else:
-	syntax_error()
+if __name__ == '__main__':
+	if len(sys.argv) < 3:
+		syntax_error()
+	group = sys.argv[1]
+	cmd = sys.argv[2]
+	args = sys.argv[3:]
+
+	info = Info(group)
+	info.run(cmd, args)
+
+#if cmd == "update_info":
+#	info.update()
+#elif cmd == "vnc":
+#	info.vnc(sys.argv[2])
+#elif cmd == "ssh":
+#	info.ssh(sys.argv[2], sys.argv[3:])
+#elif cmd == "scp":
+#	info.scp(sys.argv[2], sys.argv[3:])
+#elif cmd == "setup":
+#	info.setup(sys.argv[2])
+#elif cmd == "hostname":
+#	info.hostname(sys.argv[2])
+#else:
+#	syntax_error()

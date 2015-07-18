@@ -1,0 +1,13 @@
+set ns [new Simulator]
+source tb_compat.tcl
+
+set node [$ns node]
+append lanstr "$node "
+tb-set-hardware $node pc3000
+tb-set-node-os $node UBUNTU12-64-STD
+tb-set-node-startcmd $node "/proj/UIUCScheduling/dns/emulab-startup.sh"
+
+set big-lan [$ns make-lan "$lanstr" 1Gb 0ms]
+$ns rtproto Static
+
+$ns run

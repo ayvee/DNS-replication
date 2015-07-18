@@ -1,0 +1,12 @@
+#!/bin/bash
+if [ $# -lt 2 ]
+then
+	echo "SYNTAX: $0 <group> <command> <args>"
+	exit 2
+fi
+for region in `./am.py $1 print_regions`
+do
+	# ${@:2} means all but the first argument
+	./am.py $1 $2 $region "${@:3}" &
+done
+wait
