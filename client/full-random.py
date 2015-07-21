@@ -213,7 +213,6 @@ class AlexaStats(object):
 				self.cdf.append(cum)
 			for i in xrange(len(self.cdf)):
 				self.cdf[i] = self.cdf[i] / cum
-			print self.cdf
 
 	def random_unweighted(self):
 		return random.choice(self.websites)
@@ -221,8 +220,8 @@ class AlexaStats(object):
 	def random_weighted(self):
 		rand = random.random()
 		i = bisect.bisect(self.cdf, rand)
-		if i == len(cdf):
-			i = len(cdf) - 1
+		if i == len(self.cdf):
+			i = len(self.cdf) - 1
 		return self.websites[i]
 
 class Chooser(object):
@@ -294,7 +293,7 @@ def main():
 
 	dnsListFile = sys.argv[1]
 	with open(dnsListFile) as inf:
-		for thisServer in dnsListFile:
+		for thisServer in inf:
 			publicDnsServers.append(thisServer.rstrip())
 			allDnsServers.append(thisServer.rstrip())
 
