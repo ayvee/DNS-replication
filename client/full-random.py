@@ -259,12 +259,14 @@ class RandomChooser(Chooser):
 class RealisticChooser(Chooser):
 	def __init__(self, numServers, batchSize):
 		super(RealisticChooser, self).__init__()
-		self.numServers = numServers
+		assert numServers == 10
+		#self.numServers = numServers
 		self.batchSize = batchSize
 
 	def get_replevel(self, trialnum):
 		if trialnum % self.batchSize == 1:
-			self.replevel = random.randint(1, self.numServers)
+			#self.replevel = random.randint(1, self.numServers)
+			self.replevel = random.choice([1, 2, 3, 5, 10])
 		return self.replevel
 
 	def get_interarrival(self, trialnum):
