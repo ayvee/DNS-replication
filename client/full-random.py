@@ -336,6 +336,7 @@ def main():
 			#sleepDuration = (nextTrialAt - datetime.now()).total_seconds()
 			sleepDuration = chooser.get_interarrival(trialnum)
 			if sleepDuration > 0:
+				log.info("Sleeping for %s seconds" % sleepDuration)
 				time.sleep(sleepDuration)
 	finally:
 		setResolver(defaultResolver)
