@@ -96,6 +96,16 @@ def getDownloadTimeWebdriver(url):
 	#start = datetime.now()
 	driver = None
 	try:
+		def getRandomLink():
+			links = driver.find_elements_by_partial_link_text('')
+			if not links:
+				return None
+			for i in xrange(10): # FIXME?
+				ret = random.choice(links).get_attribute('href')
+				if ret is not None and ret.startswith('http'):
+					return ret
+			else:
+				return None
 		with Timeout(2 * downloadTimeoutSec):
 			driver = getDefaultBrowser()
 			time.sleep(5) # for browser init
@@ -103,13 +113,13 @@ def getDownloadTimeWebdriver(url):
 			wait = WebDriverWait(driver, downloadTimeoutSec, poll_frequency=5).\
 					until(lambda drv: drv.execute_script("return document.readyState") == "complete")
 			if not wait:
-				return downloadTimeoutSec
+				return downloadTimeoutSec, getRandomLink()
 			else:
 				exectime = driver.execute_script("return performance.timing.loadEventEnd - performance.timing.navigationStart")
-				return float(exectime) * 1e-3
+				return float(exectime) * 1e-3, getRandomLink()
 	except Exception as e:
 		log.error(e)
-		return downloadTimeoutSec
+		return downloadTimeoutSec, None
 	finally:
 		if driver != None:
 			driver.quit()
@@ -239,7 +249,8 @@ class Chooser(object):
 		return
 
 	@abc.abstractmethod
-	def get_website(self, trialnum):
+	def get_website(self, trialnum, randomPrevLink):
+		"randomPrevLink is a random link on the previous webpage"
 		return
 
 class RandomChooser(Chooser):
@@ -253,7 +264,7 @@ class RandomChooser(Chooser):
 	def get_interarrival(self, trialnum):
 		return 0
 
-	def get_website(self, trialnum):
+	def get_website(self, trialnum, randomPrevLink):
 		return self.alexa.random_unweighted()
 
 class RealisticChooser(Chooser):
@@ -272,8 +283,32 @@ class RealisticChooser(Chooser):
 	def get_interarrival(self, trialnum):
 		return random.lognormvariate(-0.495204, 2.7731)
 
-	def get_website(self, trialnum):
+	def get_website(self, trialnum, randomPrevLink):
 		return self.alexa.random_weighted()
+
+class LinkFollowChooser(Chooser):
+	def __init__(self, numServers, batchSize, followProbability):
+		super(LinkFollowChooser, self).__init__()
+		assert numServers == 10
+		self.batchSize == batchSize
+		self.followProbability = followProbability
+		self.randomPrevLink = None
+
+	def get_replevel(self, trialnum):
+		if trialnum % self.batchSize == 1:
+			#self.replevel = random.randint(1, self.numServers)
+			self.replevel = random.choice([1, 2, 5])
+			self.randomPrevLink = None
+		return self.replevel
+
+	def get_interarrival(self, trialnum):
+		return 0
+
+	def get_website(self, trialnum, randomPrevLink):
+		if random.random() < followProbability and self.randomPrevLink is not None:
+			return self.randomPrevLink
+		else:
+			return self.alexa.random_weighted()
 
 def main():
 	if len(sys.argv) != 3:
@@ -304,10 +339,13 @@ def main():
 		chooser = RandomChooser(len(allDnsServers))
 	elif experiment == "realistic":
 		chooser = RealisticChooser(len(allDnsServers), 50)
+	elif experiment.startswith("linkfollow_"):
+		chooser = LinkFollowChooser(len(allDnsServers), 50, float(experiment.split("_")[1]))
 	else:
 		raise Exception("Unrecognized experiment "  + experiment)
 
 	resultsCollector = None
+	randomPrevLink = None
 	try:
 		resultsCollector = ResultsCollector(len(allDnsServers))
 		trialnum = 0
@@ -316,9 +354,11 @@ def main():
 			currTime = datetime.now()
 			
 			numReps = chooser.get_replevel(trialnum)
-			website = chooser.get_website(trialnum)
+			website = chooser.get_website(trialnum, randomPrevLink)
 			def doLookup(numReps, website):
-				runtime = getDownloadTimeWebdriver(getURL(website))
+				log.info('loading %s with %s-way DNS replication' % (website, numReps))
+				runtime, randomPrevLink = getDownloadTimeWebdriver(getURL(website))
+				log.info('load time %s, random link %s' % (runtime, randomPrevLink))
 				#runtime = getDownloadTimeWget(getURL(allDomains[trial.websiteID]))
 				resultsCollector.update(numReps, website, runtime)
 			#if(numReps > 1):
