@@ -22,7 +22,7 @@ log = logging.getLogger()
 # we will load no more than one page every minTrialDuration seconds to avoid
 # overloading the local DNS server
 minTrialDuration = 0
-outputFilenames = "results/result%d.csv"
+outputFilenames = "results/%sresult%d.csv"
 proxyFilenames = "results/proxy%d.csv"
 basedir = os.path.dirname(os.path.abspath(__file__))
 proxyBin = basedir + "/../proxy/proxy"
@@ -151,8 +151,8 @@ class ResultsCollector:
 		#		with open(self.outputFilenameFormat % n, 'w'):
 		#			pass
 
-	def update(self, numReps, website, time):
-		with open(self.outputFilenameFormat % numReps, 'a') as outf:
+	def update(self, numReps, website, time, file_prefix = ''):
+		with open(self.outputFilenameFormat % (file_prefix, numReps), 'a') as outf:
 			outf.write("{website},{time}\n".format(**locals()))
 
 	def done(self):
@@ -256,6 +256,9 @@ class Chooser(object):
 		"randomPrevLink is a random link on the previous webpage"
 		return
 
+	def get_fileprefix(self):
+		return ''
+
 class RandomChooser(Chooser):
 	def __init__(self, numServers):
 		super(RandomChooser, self).__init__()
@@ -290,16 +293,16 @@ class RealisticChooser(Chooser):
 		return self.alexa.random_weighted()
 
 class LinkFollowChooser(Chooser):
-	def __init__(self, numServers, batchSize, followProbability):
+	def __init__(self, numServers, batchSize):
 		super(LinkFollowChooser, self).__init__()
 		assert numServers == 10
 		self.batchSize = batchSize
-		self.followProbability = followProbability
 
 	def get_replevel(self, trialnum):
 		if trialnum % self.batchSize == 1:
 			#self.replevel = random.randint(1, self.numServers)
 			self.replevel = random.choice([1, 2, 5])
+			self.followProbability = random.choice([0.2, 0.4, 0.6, 0.8, 1.0])
 		return self.replevel
 
 	def get_interarrival(self, trialnum):
@@ -310,6 +313,9 @@ class LinkFollowChooser(Chooser):
 			return randomPrevLink
 		else:
 			return self.alexa.random_weighted()
+
+	def get_fileprefix(self):
+		return 'p%s_' % self.followProbability
 
 def main():
 	if len(sys.argv) != 3:
@@ -340,8 +346,8 @@ def main():
 		chooser = RandomChooser(len(allDnsServers))
 	elif experiment == "realistic":
 		chooser = RealisticChooser(len(allDnsServers), 50)
-	elif experiment.startswith("linkfollow_"):
-		chooser = LinkFollowChooser(len(allDnsServers), 50, float(experiment.split("_")[1]))
+	elif experiment == "linkfollow":
+		chooser = LinkFollowChooser(len(allDnsServers), 50)
 	else:
 		raise Exception("Unrecognized experiment "  + experiment)
 
@@ -361,7 +367,7 @@ def main():
 				runtime, randomPrevLink = getDownloadTimeWebdriver(getURL(website))
 				log.info('load time %s, random link %s' % (runtime, randomPrevLink))
 				#runtime = getDownloadTimeWget(getURL(allDomains[trial.websiteID]))
-				resultsCollector.update(numReps, website, runtime)
+				resultsCollector.update(numReps, website, runtime, chooser.get_fileprefix())
 				return randomPrevLink
 			#if(numReps > 1):
 			if(numReps > 0): # FIXME
