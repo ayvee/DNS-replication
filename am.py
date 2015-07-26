@@ -19,21 +19,27 @@ class Info(object):
 			self.info = {}
 
 	def dump(self):
-		print self.info
 		with open(self.info_file, 'w') as outf:
-			json.dump(self.info, outf, sort_keys = True, indent = 4, separators = (',', ': '))
+			jsons = json.dumps(self.info, sort_keys = True, indent = 4, separators = (',', ': '))
+			print jsons
+			outf.write(jsons)
+			outf.write('\n')
 
 	def create_instance(self, region):
 		if region in self.info:
 			raise Exception("instance already exists in %s" % region)
 		# FIXME: check_output and use to update self.instances
-		subprocess.call(["%s/manage-ec2/create-instance" % basedir, region])
-		self.update_info()
-	
+		iid = subprocess.check_output(["%s/manage-ec2/create-instance" % basedir, region]).strip()
+		self.info[region] = {'instance-id': iid}
+		self.dump()
+		#self.update_info()
+
 	def kill_instance(self, region):
 		if region not in self.info:
 			raise Exception("instance doesn't exist in %s" % region)
+		subprocess.call(["ec2-terminate-instances", "--region", region, self.info[region]['instance-id']])
 		del self.info[region]
+		self.dump()
 
 	def update_info(self):
 		for region, info in self.info.iteritems():
@@ -87,15 +93,15 @@ class Info(object):
 	def setup_host(self, region):
 		if region not in self.info:
 			raise Exception("no instance in region %s" % region)
-		self.scp(region, ["ec2-setup.sh", "amhost:~"])
-		self.ssh(region, ["./ec2-setup.sh"])
+		self.scp(region, "ec2-setup.sh", "amhost:~")
+		self.ssh(region, "./ec2-setup.sh")
 
 	def setup(self, region):
 		self.setup_firewall(region)
 		self.setup_host(region)
 
 	def print_regions(self):
-		for region in self.info:
+		for region in sorted(self.info):
 			print region
 
 

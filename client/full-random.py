@@ -35,7 +35,10 @@ def getDefaultBrowser():
 	return webdriver.Chrome('./chromedriver')
 
 def getURL(website):
-	return "http://"+website
+	if website.startswith('http'):
+		return website
+	else:
+		return "http://"+website
 
 def getDefaultResolver():
 	from shutil import copy as cp
@@ -290,23 +293,21 @@ class LinkFollowChooser(Chooser):
 	def __init__(self, numServers, batchSize, followProbability):
 		super(LinkFollowChooser, self).__init__()
 		assert numServers == 10
-		self.batchSize == batchSize
+		self.batchSize = batchSize
 		self.followProbability = followProbability
-		self.randomPrevLink = None
 
 	def get_replevel(self, trialnum):
 		if trialnum % self.batchSize == 1:
 			#self.replevel = random.randint(1, self.numServers)
 			self.replevel = random.choice([1, 2, 5])
-			self.randomPrevLink = None
 		return self.replevel
 
 	def get_interarrival(self, trialnum):
 		return 0
 
 	def get_website(self, trialnum, randomPrevLink):
-		if random.random() < followProbability and self.randomPrevLink is not None:
-			return self.randomPrevLink
+		if random.random() < self.followProbability and randomPrevLink is not None:
+			return randomPrevLink
 		else:
 			return self.alexa.random_weighted()
 
@@ -361,13 +362,14 @@ def main():
 				log.info('load time %s, random link %s' % (runtime, randomPrevLink))
 				#runtime = getDownloadTimeWget(getURL(allDomains[trial.websiteID]))
 				resultsCollector.update(numReps, website, runtime)
+				return randomPrevLink
 			#if(numReps > 1):
 			if(numReps > 0): # FIXME
 				dnsServers = getDnsList(defaultResolver, publicDnsServers, numReps)
 				log.debug("%d servers: %s; allDnsServers = %s", numReps, dnsServers, allDnsServers)
 				with Proxy(proxyBin, proxyLockfile, dnsServers, stdoutFD = DEVNULL, stderrFile = proxyFilenames % numReps) as proxy:
 					proxy.waitTillSetUp()
-					doLookup(numReps, website)
+					randomPrevLink = doLookup(numReps, website)
 			else:
 				setResolver(defaultResolver)
 				doLookup(numReps, website)
