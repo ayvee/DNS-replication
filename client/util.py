@@ -33,7 +33,7 @@ def minindex(iterable, key = lambda x: x):
 class Averager(object):
     def __init__(self):
         self.T = 0
-        self.avg = 0.0
+        self.avg = 10 ** 6
 
     def update(self, val, tstep = 1):
         self.avg = (self.T * self.avg + tstep * val) / (self.T + tstep)
