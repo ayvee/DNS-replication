@@ -19,7 +19,6 @@ if len(sys.argv) != 2:
 nvals = int(sys.argv[1])
 
 all_names = [l.strip() for l in open('top1000website.txt')]
-targets = random.sample(all_names, nvals)
 for i in xrange(nvals):
-    lookup(random.coice(all_names))
+    lookup(random.choice(all_names))
     time.sleep(5)
