@@ -42,20 +42,6 @@ class Averager(object):
     def get(self):
         return self.avg
 
-class Variancer(object):
-    def __init__(self):
-        self.N = 0
-        self.tot = 0
-        self.sqtot = 0
-
-    def update(self, val):
-        self.N += 1
-        self.tot += val
-        self.sqtot += val*val
-
-    def get(self):
-        return self.sqtot / self.N - (self.tot / self.N)**2
-
 class CdfGenerator(object):
     def __init__(self, minval = None, maxval = None, nbins = 1000):
         self.nbins = nbins
@@ -68,6 +54,7 @@ class CdfGenerator(object):
         else:
             self.have_range = False
             self.all_values = []
+        self.empty = True
         self.cdf = []
 
     def __update_bins(self, val):
@@ -79,6 +66,7 @@ class CdfGenerator(object):
         self.bins[binnum] += 1
         
     def update(self, val):
+        self.empty = False
         self.nvals += 1
         if self.have_range:
             self.__update_bins(val)
@@ -86,10 +74,15 @@ class CdfGenerator(object):
             self.all_values.append(val)
 
     def done(self):
+        if self.empty:
+            return
         if not self.have_range:
-            if not self.all_values: return
+            if not self.all_values:
+                return
             self.minval = min(self.all_values)
             self.maxval = max(self.all_values)
+            if self.maxval == self.minval:
+                return
             for val in self.all_values:
                 self.__update_bins(val)
         endpoint = lambda k: self.minval + float(k) / self.nbins * (self.maxval - self.minval)
@@ -104,42 +97,20 @@ class CdfGenerator(object):
         self.cdf = vals
         return vals
 
+    def lookup(self, percentile):
+        if self.empty or not self.cdf:
+            infty = 10**6
+            return infty
+        # binary search will be faster
+        for lv, rv, cd in self.cdf:
+            if cd >= percentile:
+                return rv
+
     def to_string(self):
         return '\n'.join('{0[0]},{0[1]},{0[2]}'.format(c) for c in self.cdf) + '\n'
 
-    def write_to(self, fil, mode = 'a'):
-        with open(fil, mode) as outf:
-            outf.write(self.to_string())
-
-class Statistics(object):
-    def __init__(self):
-        self.mg = Averager()
-        self.cg = CdfGenerator()
-
-    def update(self, val):
-        self.mg.update(val)
-        self.cg.update(val)
-
-    def done(self):
-        self.cg.done()
-
     def write_to(self, fil):
-        with open(fil, 'w') as outf:
-            outf.write("#Mean = %s\n" % self.mg.get())
-            outf.write(self.cg.to_string())
-
-def _write(filename, string = None, mode = 'a'):
-    with open(filename, mode) as outf:
-        if string is not None:
-            outf.write(string)
-
-class Writer(object):
-    def __init__(self, outfile, header = None):
-        self.outfile = outfile
-        _write(outfile, header, 'w')
-
-    def update(self, val):
-        _write(self.outfile, '%s\n' % val)
+        open(fil, 'w').write(self.to_string())
 
 if __name__ == "__main__":
     import sys
