@@ -6,5 +6,5 @@ then
 fi
 while [ 1 ]
 do
-	sudo ./full-random.py 9serv.dns $1
+	sudo ./full-random.py ranked.dns $1
 done

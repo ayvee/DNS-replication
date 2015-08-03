@@ -137,9 +137,9 @@ def setResolver(resolver):
 		log.error("failed to set resolver to "+str(resolver))
 		exit(1)
 
-def getDnsList(localServer, publicServers, numNeeded):
-	random.shuffle(publicServers)
-	return ([localServer] + publicServers)[:numNeeded]
+#def getDnsList(localServer, publicServers, numNeeded):
+#	random.shuffle(publicServers)
+#	return ([localServer] + publicServers)[:numNeeded]
 
 # TODO: may want to make this a context manager instead of the explicit done()
 class ResultsCollector:
@@ -265,7 +265,8 @@ class RandomChooser(Chooser):
 		self.numServers = numServers
 
 	def get_replevel(self, trialnum):
-		return random.randint(1, self.numServers)
+		#return random.randint(0, self.numServers)
+		return random.choice([0, 1, 2, 5, 10])
 
 	def get_interarrival(self, trialnum):
 		return 0
@@ -273,24 +274,24 @@ class RandomChooser(Chooser):
 	def get_website(self, trialnum, randomPrevLink):
 		return self.alexa.random_unweighted()
 
-class RealisticChooser(Chooser):
-	def __init__(self, numServers, batchSize):
-		super(RealisticChooser, self).__init__()
-		assert numServers == 10
-		#self.numServers = numServers
-		self.batchSize = batchSize
-
-	def get_replevel(self, trialnum):
-		if trialnum % self.batchSize == 1:
-			#self.replevel = random.randint(1, self.numServers)
-			self.replevel = random.choice([1, 2, 3, 5, 10])
-		return self.replevel
-
-	def get_interarrival(self, trialnum):
-		return random.lognormvariate(-0.495204, 2.7731)
-
-	def get_website(self, trialnum, randomPrevLink):
-		return self.alexa.random_weighted()
+#class RealisticChooser(Chooser):
+#	def __init__(self, numServers, batchSize):
+#		super(RealisticChooser, self).__init__()
+#		assert numServers == 10
+#		#self.numServers = numServers
+#		self.batchSize = batchSize
+#
+#	def get_replevel(self, trialnum):
+#		if trialnum % self.batchSize == 1:
+#			#self.replevel = random.randint(1, self.numServers)
+#			self.replevel = random.choice([0, 1, 2, 5, 10])
+#		return self.replevel
+#
+#	def get_interarrival(self, trialnum):
+#		return random.lognormvariate(-0.495204, 2.7731)
+#
+#	def get_website(self, trialnum, randomPrevLink):
+#		return self.alexa.random_weighted()
 
 class LinkFollowChooser(Chooser):
 	def __init__(self, numServers, batchSize):
@@ -301,8 +302,8 @@ class LinkFollowChooser(Chooser):
 	def get_replevel(self, trialnum):
 		if trialnum % self.batchSize == 1:
 			#self.replevel = random.randint(1, self.numServers)
-			self.replevel = random.choice([1, 2, 5])
-			self.followProbability = random.choice([0.2, 0.4, 0.6, 0.8, 1.0])
+			self.replevel = random.choice([0, 1, 2, 5, 10])
+			self.followProbability = random.choice([0.0, 0.2, 0.4, 0.6, 0.8, 1.0])
 		return self.replevel
 
 	def get_interarrival(self, trialnum):
@@ -329,23 +330,23 @@ def main():
 	DEVNULL = open(os.devnull,'wb')
 
 	allDnsServers = []
-	publicDnsServers = []
+	#publicDnsServers = []
 
 	defaultResolver = getDefaultResolver()
 	log.info("Default resolver: "+defaultResolver)
-	allDnsServers.append(defaultResolver)
+	#allDnsServers.append(defaultResolver)
 
 	dnsListFile = sys.argv[1]
 	with open(dnsListFile) as inf:
 		for thisServer in inf:
-			publicDnsServers.append(thisServer.rstrip())
+			#publicDnsServers.append(thisServer.rstrip())
 			allDnsServers.append(thisServer.rstrip())
 
 	experiment = sys.argv[2]
 	if experiment == "random":
 		chooser = RandomChooser(len(allDnsServers))
-	elif experiment == "realistic":
-		chooser = RealisticChooser(len(allDnsServers), 50)
+	#elif experiment == "realistic":
+	#	chooser = RealisticChooser(len(allDnsServers), 50)
 	elif experiment == "linkfollow":
 		chooser = LinkFollowChooser(len(allDnsServers), 50)
 	else:
@@ -369,16 +370,15 @@ def main():
 				#runtime = getDownloadTimeWget(getURL(allDomains[trial.websiteID]))
 				resultsCollector.update(numReps, website, runtime, chooser.get_fileprefix())
 				return randomPrevLink
-			#if(numReps > 1):
-			if(numReps > 0): # FIXME
-				dnsServers = getDnsList(defaultResolver, publicDnsServers, numReps)
-				log.debug("%d servers: %s; allDnsServers = %s", numReps, dnsServers, allDnsServers)
-				with Proxy(proxyBin, proxyLockfile, dnsServers, stdoutFD = DEVNULL, stderrFile = proxyFilenames % numReps) as proxy:
-					proxy.waitTillSetUp()
-					randomPrevLink = doLookup(numReps, website)
-			else:
-				setResolver(defaultResolver)
-				doLookup(numReps, website)
+			if numReps > 0:
+				#dnsServers = getDnsList(defaultResolver, publicDnsServers, numReps)
+				dnsServers = allDnsServers[:numReps]
+			else: # no redundancy
+				dnsServers = [defaultResolver]
+			log.debug("%d servers: %s", numReps, dnsServers)
+			with Proxy(proxyBin, proxyLockfile, dnsServers, stdoutFD = DEVNULL, stderrFile = proxyFilenames % numReps) as proxy:
+				proxy.waitTillSetUp()
+				randomPrevLink = doLookup(numReps, website)
 
 			#nextTrialAt = currTime + timedelta(seconds = minTrialDuration)
 			#sleepDuration = (nextTrialAt - datetime.now()).total_seconds()
